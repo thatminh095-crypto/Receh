@@ -1,0 +1,17 @@
+[package]
+name = "receh-pool"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "MIT"
+description = "Soroban community round-up yield pool: per-contributor muxed contributions, on-chain proposals, weighted voting, contract-custodied grant disbursement."
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+doctest = false
+
+[dependencies]
+soroban-sdk = "22"
+
+[dev-dependencies]
+soroban-sdk = { version = "22", features = ["testutils"] }

@@ -1,4 +1,4 @@
-import { count } from 'drizzle-orm';
+import { count, sql } from 'drizzle-orm';
 import { db } from '@/server/db/client';
 import { contributors, grantProposals, roundUps, votes } from '@/server/db/schema';
 import { fromError, ok } from '@/server/lib/http';
@@ -13,8 +13,15 @@ export async function GET() {
     const [r] = await db.select({ value: count() }).from(roundUps);
     const [p] = await db.select({ value: count() }).from(grantProposals);
     const [v] = await db.select({ value: count() }).from(votes);
+    const [w] = await db
+      .select({
+        value: sql<number>`count(distinct nullif(${contributors.stellarAddress},''))::int`,
+      })
+      .from(contributors);
 
     return ok({
+      uniqueWallets: Number(w?.value ?? 0),
+      logins: c?.value ?? 0,
       contributors: c?.value ?? 0,
       roundUps: r?.value ?? 0,
       proposals: p?.value ?? 0,

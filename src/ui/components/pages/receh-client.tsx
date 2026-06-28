@@ -94,6 +94,7 @@ export function RecehClient(props: {
   );
   const [busy, setBusy] = useState(false);
   const [closing, setClosing] = useState(false);
+  const [enablingTrust, setEnablingTrust] = useState(false);
   const [walletKey, setWalletKey] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [registeredContributorId, setRegisteredContributorId] = useState<string | null>(null);
@@ -191,7 +192,7 @@ export function RecehClient(props: {
         body: JSON.stringify({
           publicKey,
           nonce: challengeJson.data.nonce,
-          signedMessage: signed.signedMessage,
+          signedNonce: signed.signedMessage,
         }),
       });
       const verifyJson = await verifyRes.json();
@@ -266,21 +267,76 @@ export function RecehClient(props: {
       toast.error('Enter a purchase with spare change (not a whole number)');
       return;
     }
+    const txHash = window.prompt(
+      `Send ${contribution.toFixed(2)} USDC to the vault M-address in your Freighter wallet, then paste the 64-char Horizon txHash here:`,
+      '',
+    );
+    if (!txHash) {
+      toast.error('A real Horizon txHash is required to record the round-up.');
+      return;
+    }
+    if (!/^[a-f0-9]{64}$/i.test(txHash)) {
+      toast.error('txHash must be 64 hex characters.');
+      return;
+    }
     setBusy(true);
     try {
       const res = await fetch('/api/roundups', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contributorId: activeContributor, purchaseUsdc: purchase }),
+        body: JSON.stringify({
+          contributorId: activeContributor,
+          purchaseUsdc: purchase,
+          txHash,
+        }),
       });
       const json = await res.json();
       if (!json.ok) throw new Error(json.error?.message ?? 'Round-up failed');
-      toast.success(`Routed ${fmtIdr(json.data.contribution)} into the vault`);
+      toast.success(
+        json.data.contractAttempt?.invoked
+          ? `Routed ${fmtIdr(json.data.contribution)} into the vault — contract.record_roundup XDR ready for Freighter.`
+          : `Routed ${fmtIdr(json.data.contribution)} into the vault (on-chain record_roundup pending).`,
+      );
       await refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Round-up failed');
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function handleEnableUsdc() {
+    if (!walletKey) {
+      toast.error('Connect your Freighter wallet first');
+      return;
+    }
+    setEnablingTrust(true);
+    try {
+      const buildRes = await fetch('/api/trustline/usdc', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ publicKey: walletKey }),
+      });
+      const buildJson = await buildRes.json();
+      if (!buildJson.ok) throw new Error(buildJson.error?.message ?? 'Trustline build failed');
+      const signModule: { signTransaction?: (
+        xdr: string,
+        opts?: { networkPassphrase?: string; address?: string },
+      ) => Promise<{ signedTxXdr?: string }> } =
+        (await import('@stellar/freighter-api').catch(() => ({}))) as never;
+      const signed = await signModule.signTransaction?.(buildJson.data.xdr, {
+        networkPassphrase: buildJson.data.networkPassphrase,
+        address: walletKey,
+      });
+      if (!signed?.signedTxXdr) {
+        toast.error('Freighter did not return a signed transaction.');
+        return;
+      }
+      toast.success('USDC trustline signed — submit it from Freighter to activate USDC.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Trustline failed');
+    } finally {
+      setEnablingTrust(false);
     }
   }
 
@@ -568,20 +624,36 @@ export function RecehClient(props: {
                 </div>
                 <div className="text-sm text-slate-500">{fmtIdr(contribution)}</div>
               </div>
-              <button
-                type="button"
-                data-testid="roundup-btn"
-                onClick={handleRoundUp}
-                disabled={busy}
-                className="inline-flex items-center justify-center gap-2 bg-emerald-600 text-white font-semibold px-6 h-12 rounded-xl text-base hover:bg-emerald-700 transition-colors disabled:opacity-60"
-              >
-                {busy ? (
-                  <Loader2 className="w-5 h-5 animate-spin" aria-hidden="true" />
-                ) : (
-                  <Coins className="w-5 h-5" aria-hidden="true" />
-                )}
-                Round up &amp; route
-              </button>
+              <div className="flex flex-col items-end gap-2">
+                <button
+                  type="button"
+                  data-testid="roundup-btn"
+                  onClick={handleRoundUp}
+                  disabled={busy}
+                  className="inline-flex items-center justify-center gap-2 bg-emerald-600 text-white font-semibold px-6 h-12 rounded-xl text-base hover:bg-emerald-700 transition-colors disabled:opacity-60"
+                >
+                  {busy ? (
+                    <Loader2 className="w-5 h-5 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Coins className="w-5 h-5" aria-hidden="true" />
+                  )}
+                  Round up &amp; route
+                </button>
+                <button
+                  type="button"
+                  data-testid="enable-usdc-btn"
+                  onClick={handleEnableUsdc}
+                  disabled={!walletKey || enablingTrust}
+                  className="inline-flex items-center justify-center gap-2 border border-emerald-600 text-emerald-700 font-semibold px-4 h-9 rounded-lg text-sm hover:bg-emerald-100 transition-colors disabled:opacity-60"
+                >
+                  {enablingTrust ? (
+                    <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Wallet className="w-4 h-4" aria-hidden="true" />
+                  )}
+                  Enable USDC trustline
+                </button>
+              </div>
             </div>
           </div>
 

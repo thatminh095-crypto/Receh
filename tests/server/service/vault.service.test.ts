@@ -91,10 +91,20 @@ describe('vault.service', () => {
   it('withdrawFromVault reduces principal and zeroes yield', async () => {
     q.results = [[vaultRow({ principalUsdc: '100.00', accruedYieldUsdc: '2.00' })], [vaultRow()]];
     await withdrawFromVault('v1', '35.00');
-    expect(q.updates[0]).toMatchObject({ accruedYieldUsdc: '0.00' });
-    expect(
-      Number.parseFloat((q.updates[0] as { principalUsdc: string }).principalUsdc),
-    ).toBeCloseTo(67, 0);
+    const update = q.updates[0] as { principalUsdc: string; accruedYieldUsdc: string };
+    expect(Number.parseFloat(update.accruedYieldUsdc)).toBeCloseTo(0, 4);
+    expect(Number.parseFloat(update.principalUsdc)).toBeCloseTo(67, 0);
+  });
+
+  it('withdrawFromVault draws from yield first when amount is below yield balance', async () => {
+    q.results = [
+      [vaultRow({ principalUsdc: '100.00', accruedYieldUsdc: '5.00' })],
+      [vaultRow()],
+    ];
+    await withdrawFromVault('v1', '2.00');
+    const update = q.updates[0] as { principalUsdc: string; accruedYieldUsdc: string };
+    expect(update.principalUsdc).toBe('100.00');
+    expect(Number.parseFloat(update.accruedYieldUsdc)).toBeCloseTo(3, 4);
   });
 
   it('getVaultStats aggregates pool, contributors and grants', async () => {

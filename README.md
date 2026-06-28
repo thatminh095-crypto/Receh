@@ -43,10 +43,57 @@ pnpm run test:e2e                   # Playwright (requires Freighter extension)
 | Wallet auth | `requestAccess` → `signMessage(nonce)` → session cookie |
 | Per-contributor attribution | `MuxedAccount(G_address, muxIndex)` — SEP-23 |
 | Round-up routing | `web+stellar:pay?destination=…&amount=…&asset_code=USDC…` — SEP-7 |
-| Vault disbursement | `Operation.payment(Asset.native(), recipient, amount)` submitted to Horizon |
+| Yield pool ledger | `RecehPool` Soroban contract `CDNZX5D3WXVXMCBFZYCEB5SSRM5VHB2UZ55PKH55KSSOIJKCAACK6KUW` (initialize / record_roundup / create_grant / vote / disburse_grant) |
+| Vault disbursement | Soroban `disburse_grant` invoke via `TransactionBuilder` + `rpc.Server.prepareTransaction` + vault keypair sign |
 | Live receipts | Horizon `/payments?cursor=now` polled in `app/api/horizon-events` |
 
-The shared vault account lives on Stellar Testnet at `GBL5RJKF4QNJ4ZPLJZ7PS7K5A4J44VEZJRV2CRTFFDRVSY2N76AIIE47`. A real on-chain grant disbursement can be verified at `https://stellar.expert/explorer/testnet/tx/<txHash>`.
+The shared vault account lives on Stellar Testnet at `GBL5RJKF4QNJ4ZPLJZ7PS7K5A4J44VEZJRV2CRTFFDRVSY2N76AIIE47`. The RecehPool Soroban contract is deployed at `CDNZX5D3WXVXMCBFZYCEB5SSRM5VHB2UZ55PKH55KSSOIJKCAACK6KUW` and any contract tx can be verified at `https://stellar.expert/explorer/testnet/tx/<txHash>`.
+
+## Soroban contract
+
+The RecehPool contract is a Rust crate at `contracts/receh-pool/`:
+
+- `Cargo.toml` — `soroban-sdk = "22"`
+- `src/lib.rs` — `RecehPool` contract with entry points `initialize`, `record_roundup`, `create_grant`, `vote`, `disburse_grant`, and views `get_total_pool`, `get_contribution`, `get_proposal`, `get_vote_count`, `get_disbursed`, etc.
+- `src/test.rs` — 12 unit tests covering initialize, round-up, grant creation, weighted voting, strict-majority disbursement, double-vote / double-disburse guards, pause / unpause, and view helpers.
+- `Makefile` — `make build`, `make test`, `make deploy`, `make init`.
+- `scripts/deploy.sh` + `scripts/init.sh` — Stellar CLI deployment + initialize against the testnet.
+- `DEPLOYMENT.md` — full deployment / wiring notes.
+
+Build and test:
+
+```bash
+cd contracts/receh-pool
+cargo test
+cargo build --release --target wasm32-unknown-unknown
+```
+
+Wiring evidence (frontend to contract):
+
+- `src/server/lib/recehPoolContract.ts` — wraps `new Contract(stellar.recehPoolContractId).call(...)` and exposes `buildDisburseXdr`, `buildVoteXdr`, `buildRecordRoundupXdr`, `submitSignedInvoke`, plus view helpers `readTotalPool`, `readAvailable`, `readMemberCount`, `readProposal`.
+- `app/api/proposals/[id]/disburse/route.ts` — server-side flow: `TransactionBuilder` → `addOperation(contract.call('disburse_grant', u64ScVal(proposalId)))` → `stellar.soroban.prepareTransaction(tx)` → vault signs → `stellar.soroban.sendTransaction(tx)`.
+- `app/api/contracts/disburse/route.ts` + `app/api/contracts/disburse/submit/route.ts` — split round-trip for client-side signing: backend prepares unsigned XDR, returns it, Freighter signs, backend submits.
+- `app/api/contracts/stats/route.ts` and `app/api/contracts/proposals/[id]/route.ts` — read contract state straight from Soroban RPC for live verification.
+
+Live deployment data: `contracts/.stellar/deploy.json` (contract id, WASM hash, upload / deploy / init tx hashes).
+
+## Live stats
+
+Counts pulled from `GET /api/stats` on the live deployment. Demo and test wallets are excluded so the numbers mean something — no inflated "users onboarded."
+
+![Stats](screen-shot/stats.jpg)
+
+| Field | Value |
+|---|---|
+| Unique wallets | 67 |
+| Logins | 67 |
+| Contributors | 67 |
+| Round-ups | 16 |
+| Proposals | 3 |
+| Votes | 3 |
+| Grants disbursed | 3 |
+| Pool total (USDC) | 11.24 |
+| Accrued yield (USDC) | 0.0835 |
 
 ## Screenshots
 

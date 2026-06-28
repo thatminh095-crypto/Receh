@@ -20,11 +20,19 @@ vi.mock('@/server/db/client', () => {
       return { where: () => ({ returning: () => Promise.resolve(nextResult()) }) };
     },
   };
+  const tx = {
+    select: () => selectChain,
+    insert: () => insertChain,
+    update: () => updateChain,
+    execute: () => Promise.resolve(undefined),
+  };
   return {
     db: {
       select: () => selectChain,
       insert: () => insertChain,
       update: () => updateChain,
+      execute: () => Promise.resolve(undefined),
+      transaction: async (cb: (txArg: typeof tx) => Promise<unknown>) => cb(tx),
     },
   };
 });
@@ -46,6 +54,15 @@ vi.mock('@/server/service/vault.service', () => ({
   getVault: () => getVault(),
 }));
 
+const buildRecordRoundupXdr = vi.fn(async () => ({
+  xdr: 'AAAA-prepared-xdr',
+  contractId: 'CXXX',
+  networkPassphrase: 'Test SDF Network ; September 2015',
+}));
+vi.mock('@/server/lib/recehPoolContract', () => ({
+  buildRecordRoundupXdr: (...a: unknown[]) => buildRecordRoundupXdr(...(a as [])),
+}));
+
 import {
   createContributor,
   getContributor,
@@ -60,6 +77,7 @@ beforeEach(() => {
   q.updates = [];
   depositToVault.mockClear();
   getVault.mockClear();
+  buildRecordRoundupXdr.mockClear();
 });
 
 const contributor = (over: Record<string, unknown> = {}) => ({
@@ -67,6 +85,7 @@ const contributor = (over: Record<string, unknown> = {}) => ({
   name: 'Budi',
   role: 'shopper',
   cause: '',
+  stellarAddress: 'GCEZWKCA5VLDNRLN3RPRJMRZOX3Z6G5CHCGSNFHEYVXM3XOJMDS674JZ',
   muxIndex: 2,
   totalContributedUsdc: '3.00',
   roundUpCount: 4,
@@ -91,7 +110,7 @@ describe('roundup.service', () => {
 
   it('createContributor assigns the next mux index', async () => {
     q.results = [
-      [{ muxIndex: 1 }, { muxIndex: 3 }], // existing indexes
+      [{ max: 3 }], // MAX(muxIndex) aggregate
       [contributor({ muxIndex: 4 })], // insert returning
     ];
     const out = await createContributor({ name: 'New', role: 'shopper', cause: '' });
@@ -112,17 +131,54 @@ describe('roundup.service', () => {
       [contributor()], // getContributor (inside quote)
       [{ id: 'r1', contributionUsdc: '0.70' }], // insert round-up returning
     ];
-    const out = await recordRoundUp({ contributorId: 'c1', purchaseUsdc: '4.30' });
+    const out = await recordRoundUp({
+      contributorId: 'c1',
+      purchaseUsdc: '4.30',
+      txHash: 'a'.repeat(64),
+    });
     expect(out.contribution).toBe('0.70');
     expect(depositToVault).toHaveBeenCalledWith('v1', '0.70');
-    // contributor total bumped 3.00 -> 3.70
     expect(q.updates[0]).toMatchObject({ totalContributedUsdc: '3.70', roundUpCount: 5 });
+    expect(buildRecordRoundupXdr).toHaveBeenCalledTimes(1);
+    expect(out.contractAttempt.invoked).toBe(true);
+    expect(out.contractAttempt.xdr).toBe('AAAA-prepared-xdr');
+  });
+
+  it('recordRoundUp skips on-chain call when contributor lacks stellarAddress', async () => {
+    q.results = [
+      [contributor({ stellarAddress: '' })],
+      [{ id: 'r1', contributionUsdc: '0.70' }],
+    ];
+    const out = await recordRoundUp({
+      contributorId: 'c1',
+      purchaseUsdc: '4.30',
+      txHash: 'a'.repeat(64),
+    });
+    expect(buildRecordRoundupXdr).not.toHaveBeenCalled();
+    expect(out.contractAttempt.invoked).toBe(false);
+    expect(out.contractAttempt.reason).toContain('stellarAddress');
+  });
+
+  it('recordRoundUp rejects missing txHash', async () => {
+    await expect(
+      recordRoundUp({ contributorId: 'c1', purchaseUsdc: '4.30', txHash: '' }),
+    ).rejects.toMatchObject({ code: 'INVALID_INPUT' });
+  });
+
+  it('recordRoundUp rejects malformed txHash', async () => {
+    await expect(
+      recordRoundUp({ contributorId: 'c1', purchaseUsdc: '4.30', txHash: 'not-hex' }),
+    ).rejects.toMatchObject({ code: 'INVALID_INPUT' });
   });
 
   it('recordRoundUp rejects a whole-number purchase (no spare change)', async () => {
     q.results = [[contributor()]];
     await expect(
-      recordRoundUp({ contributorId: 'c1', purchaseUsdc: '5.00' }),
+      recordRoundUp({
+        contributorId: 'c1',
+        purchaseUsdc: '5.00',
+        txHash: 'a'.repeat(64),
+      }),
     ).rejects.toMatchObject({ code: 'INVALID_INPUT' });
   });
 

@@ -52,20 +52,31 @@ export async function depositToVault(vaultId: string, contributionUsdc: string) 
   return rows[0]!;
 }
 
-/** Reduce vault principal after a grant disbursement. */
+/** Reduce vault after a grant disbursement: yield is spent first, then principal. */
 export async function withdrawFromVault(vaultId: string, amountUsdc: string) {
   const vault = await getVaultById(vaultId);
-  const next = Math.max(
-    0,
-    Number.parseFloat(vault.principalUsdc) +
-      Number.parseFloat(vault.accruedYieldUsdc) -
-      Number.parseFloat(amountUsdc),
-  );
-  // Disbursement draws from yield first, then principal; we just track remaining principal.
-  const remainingPrincipal = next.toFixed(2);
+  const amount = Number.parseFloat(amountUsdc);
+  const yieldBal = Number.parseFloat(vault.accruedYieldUsdc);
+  const principalBal = Number.parseFloat(vault.principalUsdc);
+
+  let newYield: number;
+  let newPrincipal: number;
+  if (amount <= yieldBal) {
+    newYield = yieldBal - amount;
+    newPrincipal = principalBal;
+  } else {
+    newYield = 0;
+    const amountFromPrincipal = amount - yieldBal;
+    newPrincipal = Math.max(0, principalBal - amountFromPrincipal);
+  }
+
   const rows = await db
     .update(vaultPool)
-    .set({ principalUsdc: remainingPrincipal, accruedYieldUsdc: '0.00', updatedAt: new Date() })
+    .set({
+      principalUsdc: newPrincipal.toFixed(2),
+      accruedYieldUsdc: newYield.toFixed(4),
+      updatedAt: new Date(),
+    })
     .where(eq(vaultPool.id, vaultId))
     .returning();
   return rows[0]!;
