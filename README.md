@@ -18,6 +18,13 @@ Receh watches a shopper's purchase, rounds it up to the next whole USDC, and rou
 6. **Propose & vote** — Contributors submit grant proposals; every contributor votes, weighted by their accumulated round-ups.
 7. **Disburse** — Closing the voting window picks the winner and submits a real Stellar payment from the vault to the proposal payout address. The on-chain tx hash is shown with a stellar.expert link.
 
+---
+## Demo & Pitch Deck
+
+- **Demo Video:** [Watch Demo]()
+- **Pitch Deck:** [View Pitch Deck](https://drive.google.com/file/d/17qf44UnXSlH3l_SwYjo0Ej_3VjYa9vUf/view?usp=drive_link)
+---
+
 ## Tech stack
 
 Next.js 16 (App Router, Turbopack) · React 19 · TypeScript strict · Drizzle ORM on Postgres · `@stellar/stellar-sdk` · `@stellar/freighter-api` v6 · Tailwind v4 · Vitest · Playwright.
