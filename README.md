@@ -21,7 +21,7 @@ Receh watches a shopper's purchase, rounds it up to the next whole USDC, and rou
 ---
 ## Demo & Pitch Deck
 
-- **Demo Video:** [Watch Demo]()
+- **Demo Video:** [Watch Demo](https://drive.google.com/file/d/1l8sVQfae0O-KUqcAaRtCHXwL3pnZzoTk/view?usp=drive_link)
 - **Pitch Deck:** [View Pitch Deck](https://drive.google.com/file/d/17qf44UnXSlH3l_SwYjo0Ej_3VjYa9vUf/view?usp=drive_link)
 ---
 
