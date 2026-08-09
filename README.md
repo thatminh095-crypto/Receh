@@ -26,7 +26,7 @@ LIVE on Stellar Mainnet: https://receh-gamma.vercel.app
 
 Submit your GitHub repository link below before the monthly deadline:
 
-**https://github.com/your-org/Receh**
+**https://github.com/thatminh095-crypto/Receh**
 
 <details>
 <summary>Current evidence totals</summary>
