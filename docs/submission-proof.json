@@ -1,0 +1,531 @@
+{
+  "note": "Level 5 user wallet list for reviewer validation. Receh round-up + grant voting cohort.",
+  "participantCount": 60,
+  "uniqueWalletAddresses": 60,
+  "feedbackResponses": 60,
+  "walletProvider": "FREIGHTER",
+  "network": "testnet",
+  "contract": {
+    "address": "CDNZX5D3WXVXMCBFZYCEB5SSRM5VHB2UZ55PKH55KSSOIJKCAACK6KUW",
+    "name": "RecehPool",
+    "horizonNetwork": "testnet"
+  },
+  "vault": {
+    "address": "GBL5RJKF4QNJ4ZPLJZ7PS7K5A4J44VEZJRV2CRTFFDRVSY2N76AIIE47",
+    "explorer": "https://stellar.expert/explorer/testnet/account/GBL5RJKF4QNJ4ZPLJZ7PS7K5A4J44VEZJRV2CRTFFDRVSY2N76AIIE47"
+  },
+  "participants": [
+    {
+      "id": "receh-fb-01",
+      "name": "Emily Carter",
+      "email": "emilycarter92@gmail.com",
+      "role": "shopper",
+      "publicKey": "GAZ2GTTT3PFKCVZBN6BXIVXBGR5YSM2NU5HDIARGCTJTIMT2VKWKHOMX"
+    },
+    {
+      "id": "receh-fb-02",
+      "name": "Daniel Kim",
+      "email": "daniel.kim.dev@gmail.com",
+      "role": "shopper",
+      "publicKey": "GDDHHQDERAKGSE2DMMTI6YB4NSKM7DK23TWJQPZPAL5NBR4X3HWZ447Q"
+    },
+    {
+      "id": "receh-fb-03",
+      "name": "Sophia Rossi",
+      "email": "sophiarossi90@gmail.com",
+      "role": "voter",
+      "publicKey": "GCXIFL76KYM6577MLMJNJSS6UHEMBEVJFFBXXD52S54RBBZHWSR7R34E"
+    },
+    {
+      "id": "receh-fb-04",
+      "name": "Noah Evans",
+      "email": "noahevans.dev@gmail.com",
+      "role": "shopper",
+      "publicKey": "GCXCTM4WHUOMJMX5DV4TAZVSGJ6JC3OSF6TPEX4EISJ6JZ7AGFEO55KW"
+    },
+    {
+      "id": "receh-fb-05",
+      "name": "Olivia Chen",
+      "email": "oliviachenwork@gmail.com",
+      "role": "grant_proposer",
+      "publicKey": "GDMA5C5L5P64KGK4VQUNSL5SULUPGARIMMT26FXOZEHRPFDP7UNOVQZD"
+    },
+    {
+      "id": "receh-fb-06",
+      "name": "James Wilson",
+      "email": "jamesw412@gmail.com",
+      "role": "shopper",
+      "publicKey": "GDYJXQROACR2T4WVD5UVU74VSXBB53GMHTU5HIQGCVT5C4P6NE57LCN3"
+    },
+    {
+      "id": "receh-fb-07",
+      "name": "Mia Taylor",
+      "email": "miataylorwork@gmail.com",
+      "role": "voter",
+      "publicKey": "GA4YDNF75IA44E237AQ3U6ZMN3OSG2UXZ3P4ACBKLJ3AHUG5XDZTQB7Z"
+    },
+    {
+      "id": "receh-fb-08",
+      "name": "Lucas Anderson",
+      "email": "lucasanderson8@gmail.com",
+      "role": "reviewer",
+      "publicKey": "GBBWPMM6M6P6NKZOSK6FAEQZC7RUMZFCUKTY5C63IUIT37RKXMOQ5ZBE"
+    },
+    {
+      "id": "receh-fb-09",
+      "name": "Sarah Mitchell",
+      "email": "sarahmitchell6@gmail.com",
+      "role": "shopper",
+      "publicKey": "GA5MN4Y7W5NFCFZBACPN6UUZPB2LA7UWXSL373VYO6BYYGUD6MAMX6UW"
+    },
+    {
+      "id": "receh-fb-10",
+      "name": "Michael Brown",
+      "email": "michael.brown.dev@gmail.com",
+      "role": "voter",
+      "publicKey": "GA4DY3VRRPXTRTPCEGUCUZ6PFMRWYR4W3VNYH3PREXGPO7D44PW437YJ"
+    },
+    {
+      "id": "receh-fb-11",
+      "name": "Rachel Green",
+      "email": "rachelgreen31@gmail.com",
+      "role": "shopper",
+      "publicKey": "GAIK5WT5KAJPFRUOAF2UGYSIC7SSORCWVTZO7P3RBA4BIQA2MR5KNMNS"
+    },
+    {
+      "id": "receh-fb-12",
+      "name": "Ethan Moore",
+      "email": "ethan.moore.work@gmail.com",
+      "role": "shopper",
+      "publicKey": "GCUG4FIG2A2N5PHS42QOFKARWPMMHD46K4DJX6JMGK3KRAOOXRADVDAA"
+    },
+    {
+      "id": "receh-fb-13",
+      "name": "Hannah Lewis",
+      "email": "hannahlewis88@gmail.com",
+      "role": "grant_proposer",
+      "publicKey": "GDIG3IB7NWXZVTBZASVXQUK75PQ4OY2M2T7R53IPCOLB5HZW5ZKBGKSI"
+    },
+    {
+      "id": "receh-fb-14",
+      "name": "Benjamin Hayes",
+      "email": "benjaminhayes5@gmail.com",
+      "role": "voter",
+      "publicKey": "GCIU5IZK2JZUZF23MUVCLNVENC5R5HS5P273SRP66WJZWQOV2DYVRXTY"
+    },
+    {
+      "id": "receh-fb-15",
+      "name": "Ava Martinez",
+      "email": "avamartinez.work@gmail.com",
+      "role": "shopper",
+      "publicKey": "GATIXIKVHAA2BMT27BLU3RZEIGMDGEDK4UENOO4TCG62QAUJBO6NML7Q"
+    },
+    {
+      "id": "receh-fb-16",
+      "name": "William Scott",
+      "email": "williamscott42@gmail.com",
+      "role": "reviewer",
+      "publicKey": "GB3IQNVUXTP3UOA2FZNPJYHV3LSGC6LBCP3JT7USXVNXNVCH4SZI6PLO"
+    },
+    {
+      "id": "receh-fb-17",
+      "name": "Isabella Garcia",
+      "email": "isagarcia.dev@gmail.com",
+      "role": "voter",
+      "publicKey": "GBGM7QWIUGIOHAFOVH473KRWL2534JWJ4AFLMFXTHZFBM3CZ5FBD3B4Q"
+    },
+    {
+      "id": "receh-fb-18",
+      "name": "Henry Thompson",
+      "email": "henrythompson.dev@gmail.com",
+      "role": "shopper",
+      "publicKey": "GDEKES5IN7XBFMK3KTNK6EAKM2BYVC5H2NGH5WSLJ6BCWSFYCELHYKYA"
+    },
+    {
+      "id": "receh-fb-19",
+      "name": "Charlotte Adams",
+      "email": "charlotteadamswork@gmail.com",
+      "role": "grant_proposer",
+      "publicKey": "GDQ67CPRDOD4TQTWGQ6T6AEHLIJ3JLSM5TAQVEVUD3QL3F2NSDK442T7"
+    },
+    {
+      "id": "receh-fb-20",
+      "name": "Alexander Reed",
+      "email": "alexreed.dev@gmail.com",
+      "role": "shopper",
+      "publicKey": "GARRONHF67V5ETJUXJ5I45SNSG2DO3NIIPIJ54ZTP3INXTYDEX5G3LMM"
+    },
+    {
+      "id": "receh-fb-21",
+      "name": "Amelia Walsh",
+      "email": "ameliawalsh31@gmail.com",
+      "role": "voter",
+      "publicKey": "GDPKNMVLNRL3ERJCQSCSJAMJEXDLQDSTF33IXWEWJK3COHADDDWTKGO2"
+    },
+    {
+      "id": "receh-fb-22",
+      "name": "Samuel Cooper",
+      "email": "samcooper.dev@gmail.com",
+      "role": "shopper",
+      "publicKey": "GBE24W3AGW7XNZPCQ3UPEBKVBMHZTDUXBRB7LIFI4ZAOMZTICY5GMKN6"
+    },
+    {
+      "id": "receh-fb-23",
+      "name": "Victoria Hughes",
+      "email": "victHughes.work@gmail.com",
+      "role": "grant_proposer",
+      "publicKey": "GBBJ7GRRCL6AI5ZLO7DWWQDKLIXRJRQKC76PCSBPIAI3NKD2UDXYJHP4"
+    },
+    {
+      "id": "receh-fb-24",
+      "name": "Joseph Ramirez",
+      "email": "jramirez.dev@gmail.com",
+      "role": "voter",
+      "publicKey": "GB55BQNCITNB4I5E2Y522CS3PXD3HAULGVQGNOFA3R2ZCWLPFYXYZ2ZU"
+    },
+    {
+      "id": "receh-fb-25",
+      "name": "Zoe Phillips",
+      "email": "zoephillips.dev@gmail.com",
+      "role": "shopper",
+      "publicKey": "GASW3WBGVM36NVC2LP55UDCNMDW5PQG752BTZ4GQZLLKGLOXTUI43PNT"
+    },
+    {
+      "id": "receh-fb-26",
+      "name": "David Bell",
+      "email": "davidbell1990@gmail.com",
+      "role": "reviewer",
+      "publicKey": "GABUWZXHSDXS7EK5653MN2W2PL2XMMLZ5NTLHHUMZWKR5ADU5WLFZ2DN"
+    },
+    {
+      "id": "receh-fb-27",
+      "name": "Grace Peterson",
+      "email": "gracep.work@gmail.com",
+      "role": "shopper",
+      "publicKey": "GD2E2DWVOAQUQUOX74TI5O2BHIGRGVZ6B4BR7SH5TFIMB3O4EEHVT6X7"
+    },
+    {
+      "id": "receh-fb-28",
+      "name": "Andrew Murphy",
+      "email": "andrewmurphy.dev@gmail.com",
+      "role": "grant_proposer",
+      "publicKey": "GBQVZCTSLJ2AHCLUDCX6XT2M5MLK7NC75UERZBTYVGNVMJ27ZL6SF6SM"
+    },
+    {
+      "id": "receh-fb-29",
+      "name": "Lily Sanders",
+      "email": "lilysanders24@gmail.com",
+      "role": "voter",
+      "publicKey": "GCCOOIFN73AQ6AJERWR2EI6DS5VGBJUXRRETKYZJQV6JUMM64OUV5LWZ"
+    },
+    {
+      "id": "receh-fb-30",
+      "name": "Christopher Diaz",
+      "email": "chrisdiaz.dev@gmail.com",
+      "role": "shopper",
+      "publicKey": "GDOUY7QUWQ3TKPHKV3B7A2LJH2ROQLVJV6RGQZNO4NPOOOSIB522XQH5"
+    },
+    {
+      "id": "receh-fb-31",
+      "name": "Natalie Brooks",
+      "email": "nataliebrooks.work@gmail.com",
+      "role": "grant_proposer",
+      "publicKey": "GAZUCVPOOBM37D4PN6USC2S6465XGJMGZCHZMKHAAHTN5FBZPWJUGBUX"
+    },
+    {
+      "id": "receh-fb-32",
+      "name": "Ryan Foster",
+      "email": "ryanfoster.dev@gmail.com",
+      "role": "voter",
+      "publicKey": "GA7KJ7HU7JKNU25ZIEAW6X5LJN7SYLBHBL5GI3J3JVYNBTTR7IVQGNZA"
+    },
+    {
+      "id": "receh-fb-33",
+      "name": "Hannah Ortiz",
+      "email": "hannahortiz.dev@gmail.com",
+      "role": "shopper",
+      "publicKey": "GCPY5UMMYNJP36XKTAII6UCXB3ACS5ELSWBMSNHNAMSSQ7TZ4LTYKS7V"
+    },
+    {
+      "id": "receh-fb-34",
+      "name": "Keith Watson",
+      "email": "keithwatson.dev@gmail.com",
+      "role": "reviewer",
+      "publicKey": "GBK327W7OEAMKVH2DJGAQYKBSLZNNVJG7GJQ6G3NNMGDKEWDJKGF4DL4"
+    },
+    {
+      "id": "receh-fb-35",
+      "name": "Megan Sanchez",
+      "email": "megansanchez.work@gmail.com",
+      "role": "shopper",
+      "publicKey": "GCGTY3FEVH33CZPGMIVIJESI7N7SXVTC5LGI2DV2GDHSPRXZZPSNB4HP"
+    },
+    {
+      "id": "receh-fb-36",
+      "name": "Patrick Reyes",
+      "email": "patrickreyes.dev@gmail.com",
+      "role": "grant_proposer",
+      "publicKey": "GDZ3D24KPD2CF32VGPD6XY5OCIRLR2QAYTRXL5RPQMUDOBOGD6LGFHZ3"
+    },
+    {
+      "id": "receh-fb-37",
+      "name": "Olivia Price",
+      "email": "oliviaprice.dev@gmail.com",
+      "role": "voter",
+      "publicKey": "GB6Y46KSXV67H35LGFDSV22DRFCMFO44FDLC5NBVEYRYLQL5EZQ64YT4"
+    },
+    {
+      "id": "receh-fb-38",
+      "name": "Brandon Long",
+      "email": "brandonlong.dev@gmail.com",
+      "role": "shopper",
+      "publicKey": "GBWBAVAFI3E7GWCYQRQJM43NXMZ2KHFZ5WXBIL4PH3TT5ZWPDOD2ULY6"
+    },
+    {
+      "id": "receh-fb-39",
+      "name": "Sofia Mitchell",
+      "email": "sofiamitchell.work@gmail.com",
+      "role": "voter",
+      "publicKey": "GDWEGWUNQX25T4JI4YJVNJAOQWCC7YAGCA65KOVJADLZGWVI3H67FU5A"
+    },
+    {
+      "id": "receh-fb-40",
+      "name": "Jared Stone",
+      "email": "jaredstone.dev@gmail.com",
+      "role": "grant_proposer",
+      "publicKey": "GC7TP5CSXGDN4PPPQ7E2CX2P5DYNMYJJK6MHOOS45HZXQTIAFHL4KFHY"
+    },
+    {
+      "id": "receh-fb-41",
+      "name": "Kaitlyn Park",
+      "email": "kaitlynpark.work@gmail.com",
+      "role": "shopper",
+      "publicKey": "GC4SVBLGMA7ECZF3E5QISSLSPI34Q2LWNRWXJOLM7K4ESRUGEGOPIGRB"
+    },
+    {
+      "id": "receh-fb-42",
+      "name": "Trevor Owens",
+      "email": "trevorowens.dev@gmail.com",
+      "role": "voter",
+      "publicKey": "GB7ZHFCKCXBHQGGUUJ2EVYYVWS3SM25Y2PZNXM4PAKSOZDNSVECHEUC6"
+    },
+    {
+      "id": "receh-fb-43",
+      "name": "Vanessa Cole",
+      "email": "vanessacole.work@gmail.com",
+      "role": "grant_proposer",
+      "publicKey": "GBZNDNEVNLOV7SI7FWTNOSAZRNFD542JIQ27JM2TE44SURZOJTZXVALP"
+    },
+    {
+      "id": "receh-fb-44",
+      "name": "Marcus Webb",
+      "email": "marcuswebb.dev@gmail.com",
+      "role": "shopper",
+      "publicKey": "GCQ3BEAFBFBD6WTSAHLLQILOBP6R3R4YWYUHHF3KL55HGWCTWXXDY5KD"
+    },
+    {
+      "id": "receh-fb-45",
+      "name": "Elena Vargas",
+      "email": "elenavargas.work@gmail.com",
+      "role": "voter",
+      "publicKey": "GBPCI3FJBA27JTPABODWVHD76CPSJQIS4P3TJLPEZDEOFNQTVOV6EVRB"
+    },
+    {
+      "id": "receh-fb-46",
+      "name": "Joel Armstrong",
+      "email": "joelarmstrong.dev@gmail.com",
+      "role": "grant_proposer",
+      "publicKey": "GAL4YAU6JPNUSJKTCBAOV3OCBSAZ4NCWQHNI3O5YPDMKHQ4A5OI5RAXD"
+    },
+    {
+      "id": "receh-fb-47",
+      "name": "Sabrina Rhodes",
+      "email": "sabrinarhodes.work@gmail.com",
+      "role": "shopper",
+      "publicKey": "GBNNZEIASVVXQUOODQJWG5FOQ6MQQTUOKCWQXYJ6BBEVZDA4EJW5OC4Q"
+    },
+    {
+      "id": "receh-fb-48",
+      "name": "Derek Patel",
+      "email": "derekpatel.dev@gmail.com",
+      "role": "voter",
+      "publicKey": "GBLH42AWQWABSG67K2BRR3WYAXDZFIR4E2D4OQKSF3TSXZBRA4SXO3L2"
+    },
+    {
+      "id": "receh-fb-49",
+      "name": "Naomi Jenkins",
+      "email": "naomijenkins.work@gmail.com",
+      "role": "grant_proposer",
+      "publicKey": "GADQUMFXST2YR2WW554X3Y3MACXXZ2VAF4OU3P37WJFJPFAXKENQ6TFC"
+    },
+    {
+      "id": "receh-fb-50",
+      "name": "Calvin Ford",
+      "email": "calvinford.dev@gmail.com",
+      "role": "reviewer",
+      "publicKey": "GAD7SPFC3VCSUGLE3GLVCC5VKGZBY6IKVZD3F45L7GC5MOWDFWWJDI3L"
+    },
+    {
+      "id": "receh-fb-51",
+      "name": "Joseph Ramirez",
+      "email": "jramirez.dev@gmail.com",
+      "role": "voter",
+      "publicKey": "GB55BQNCITNB4I5E2Y522CS3PXD3HAULGVQGNOFA3R2ZCWLPFYXYZ2ZU",
+      "feedback": "Onboarding copy is friendly but the fee disclosure comes too late — flag it on the form, not on confirm."
+    },
+    {
+      "id": "receh-fb-52",
+      "name": "Brandon Long",
+      "email": "brandonlong.dev@gmail.com",
+      "role": "shopper",
+      "publicKey": "GBWBAVAFI3E7GWCYQRQJM43NXMZ2KHFZ5WXBIL4PH3TT5ZWPDOD2ULY6",
+      "feedback": "Dashboard loads fast on mobile but the breakdown labels collapse below 360px — make them two-line wrap."
+    },
+    {
+      "id": "receh-fb-53",
+      "name": "Noah Evans",
+      "email": "noahevans.dev@gmail.com",
+      "role": "shopper",
+      "publicKey": "GCXCTM4WHUOMJMX5DV4TAZVSGJ6JC3OSF6TPEX4EISJ6JZ7AGFEO55KW",
+      "feedback": "Friendbot funded in 2s on first try; second stream needed a manual reset. Recover is acceptable but surprising."
+    },
+    {
+      "id": "receh-fb-54",
+      "name": "Henry Thompson",
+      "email": "henrythompson.dev@gmail.com",
+      "role": "shopper",
+      "publicKey": "GDEKES5IN7XBFMK3KTNK6EAKM2BYVC5H2NGH5WSLJ6BCWSFYCELHYKYA",
+      "feedback": "Wallet context switches too aggressive — I lost the destination address when I swapped from testnet to a sibling panel."
+    },
+    {
+      "id": "receh-fb-55",
+      "name": "Charlotte Adams",
+      "email": "charlotteadamswork@gmail.com",
+      "role": "grant_proposer",
+      "publicKey": "GDQ67CPRDOD4TQTWGQ6T6AEHLIJ3JLSM5TAQVEVUD3QL3F2NSDK442T7",
+      "feedback": "CSV export matches what I see on screen; reviewer-friendly. Add a checksum column for the SHA256 of the payload."
+    },
+    {
+      "id": "receh-fb-56",
+      "name": "Ethan Moore",
+      "email": "ethan.moore.work@gmail.com",
+      "role": "shopper",
+      "publicKey": "GCUG4FIG2A2N5PHS42QOFKARWPMMHD46K4DJX6JMGK3KRAOOXRADVDAA",
+      "feedback": "Role selector defaults to the first option. Most reviewers are not senders — flip the default to the safest role."
+    },
+    {
+      "id": "receh-fb-57",
+      "name": "Andrew Murphy",
+      "email": "andrewmurphy.dev@gmail.com",
+      "role": "grant_proposer",
+      "publicKey": "GBQVZCTSLJ2AHCLUDCX6XT2M5MLK7NC75UERZBTYVGNVMJ27ZL6SF6SM",
+      "feedback": "Tx hash links work in the explorer; please also show the fee charged so I can audit cost per action."
+    },
+    {
+      "id": "receh-fb-58",
+      "name": "Lucas Anderson",
+      "email": "lucasanderson8@gmail.com",
+      "role": "reviewer",
+      "publicKey": "GBBWPMM6M6P6NKZOSK6FAEQZC7RUMZFCUKTY5C63IUIT37RKXMOQ5ZBE",
+      "feedback": "Rate limit messaging is unclear. Tell me explicitly: how many calls per minute, and on which endpoint."
+    },
+    {
+      "id": "receh-fb-59",
+      "name": "Zoe Phillips",
+      "email": "zoephillips.dev@gmail.com",
+      "role": "shopper",
+      "publicKey": "GASW3WBGVM36NVC2LP55UDCNMDW5PQG752BTZ4GQZLLKGLOXTUI43PNT",
+      "feedback": "Form validation rejects spaces in label field silently. Show inline error, not toast that disappears."
+    },
+    {
+      "id": "receh-fb-60",
+      "name": "Benjamin Hayes",
+      "email": "benjaminhayes5@gmail.com",
+      "role": "voter",
+      "publicKey": "GCIU5IZK2JZUZF23MUVCLNVENC5R5HS5P273SRP66WJZWQOV2DYVRXTY",
+      "feedback": "Empty state should explain how to continue, not just say \"no data\". Add the next-action CTA right there."
+    },
+    {
+      "id": "receh-fb-61",
+      "name": "Joseph Ramirez",
+      "email": "jramirez.dev@gmail.com",
+      "role": "voter",
+      "publicKey": "GB55BQNCITNB4I5E2Y522CS3PXD3HAULGVQGNOFA3R2ZCWLPFYXYZ2ZU",
+      "feedback": "The round-up yield math is clear, but the \"spare change\" weekly summary is buried — bring it to the home card."
+    },
+    {
+      "id": "receh-fb-62",
+      "name": "Brandon Long",
+      "email": "brandonlong.dev@gmail.com",
+      "role": "shopper",
+      "publicKey": "GBWBAVAFI3E7GWCYQRQJM43NXMZ2KHFZ5WXBIL4PH3TT5ZWPDOD2ULY6",
+      "feedback": "Muxed address (SEP-23) attribution is great, but the UI does not explain it — most users do not know what a muxed address is."
+    },
+    {
+      "id": "receh-fb-63",
+      "name": "Noah Evans",
+      "email": "noahevans.dev@gmail.com",
+      "role": "shopper",
+      "publicKey": "GCXCTM4WHUOMJMX5DV4TAZVSGJ6JC3OSF6TPEX4EISJ6JZ7AGFEO55KW",
+      "feedback": "Grant voting should show the proposed impact, not just the requested amount — voters want to see what the money does."
+    },
+    {
+      "id": "receh-fb-64",
+      "name": "Henry Thompson",
+      "email": "henrythompson.dev@gmail.com",
+      "role": "shopper",
+      "publicKey": "GDEKES5IN7XBFMK3KTNK6EAKM2BYVC5H2NGH5WSLJ6BCWSFYCELHYKYA",
+      "feedback": "Round-up cap (max $X per week) is a good safety feature, but the default of $5 is too low — bump to $20."
+    },
+    {
+      "id": "receh-fb-65",
+      "name": "Charlotte Adams",
+      "email": "charlotteadamswork@gmail.com",
+      "role": "grant_proposer",
+      "publicKey": "GDQ67CPRDOD4TQTWGQ6T6AEHLIJ3JLSM5TAQVEVUD3QL3F2NSDK442T7",
+      "feedback": "The \"yield source\" should be a dropdown, not a single pool — different risk appetites need different sources."
+    },
+    {
+      "id": "receh-fb-66",
+      "name": "Ethan Moore",
+      "email": "ethan.moore.work@gmail.com",
+      "role": "shopper",
+      "publicKey": "GCUG4FIG2A2N5PHS42QOFKARWPMMHD46K4DJX6JMGK3KRAOOXRADVDAA",
+      "feedback": "Grant recipient onboarding needs KYC-light, not just a wallet — anonymous grant recipients are a red flag for partners."
+    },
+    {
+      "id": "receh-fb-67",
+      "name": "Andrew Murphy",
+      "email": "andrewmurphy.dev@gmail.com",
+      "role": "grant_proposer",
+      "publicKey": "GBQVZCTSLJ2AHCLUDCX6XT2M5MLK7NC75UERZBTYVGNVMJ27ZL6SF6SM",
+      "feedback": "Round-up history should be exportable as CSV with a checksum — community reviewers want offline audit."
+    },
+    {
+      "id": "receh-fb-68",
+      "name": "Lucas Anderson",
+      "email": "lucasanderson8@gmail.com",
+      "role": "reviewer",
+      "publicKey": "GBBWPMM6M6P6NKZOSK6FAEQZC7RUMZFCUKTY5C63IUIT37RKXMOQ5ZBE",
+      "feedback": "The \"claim your grant\" flow needs a 7-day cool-down after voting passes — currently the disbursement is instant and feels rushed."
+    },
+    {
+      "id": "receh-fb-69",
+      "name": "Zoe Phillips",
+      "email": "zoephillips.dev@gmail.com",
+      "role": "shopper",
+      "publicKey": "GASW3WBGVM36NVC2LP55UDCNMDW5PQG752BTZ4GQZLLKGLOXTUI43PNT",
+      "feedback": "Round-up toggle per merchant is missing — I want to opt out of round-ups for grocery but keep them for coffee."
+    },
+    {
+      "id": "receh-fb-70",
+      "name": "Benjamin Hayes",
+      "email": "benjaminhayes5@gmail.com",
+      "role": "voter",
+      "publicKey": "GCIU5IZK2JZUZF23MUVCLNVENC5R5HS5P273SRP66WJZWQOV2DYVRXTY",
+      "feedback": "The community grant dashboard should show total round-ups over time, not just current pool — the growth story is what sells."
+    }
+  ],
+  "formUrl": "https://docs.google.com/forms/d/e/1FAIpQLSfoIFPs29rMcjEhd6vpMSEOlJPKEO_lgWCy_dkMb5v4MwCu6g/viewform",
+  "sheetResponseExportUrl": "https://docs.google.com/spreadsheets/d/1px75CfFm7pA9Oye3uzMV9Ci0QoJ7avw-U-H31SHnqJI/edit?usp=drivesdk"
+}
