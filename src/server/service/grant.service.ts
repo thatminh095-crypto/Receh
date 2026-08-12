@@ -1,4 +1,4 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '@/server/db/client';
 import { grantProposals, horizonEvents, type NewGrantProposal, votes } from '@/server/db/schema';
 import { payFromVault } from '@/server/lib/disburse';
@@ -17,6 +17,29 @@ export async function listProposals(vaultId?: string) {
   return db.select().from(grantProposals).orderBy(desc(grantProposals.createdAt));
 }
 
+/**
+ * Proposals with their vote count, fetched via a single grouped query instead of
+ * one votes lookup per proposal.
+ */
+export async function listProposalsWithVoteCounts(vaultId?: string) {
+  const proposals = await listProposals(vaultId);
+  if (proposals.length === 0) return [];
+
+  const voteCounts = await db
+    .select({ proposalId: votes.proposalId, voteCount: count() })
+    .from(votes)
+    .where(
+      inArray(
+        votes.proposalId,
+        proposals.map((p) => p.id),
+      ),
+    )
+    .groupBy(votes.proposalId);
+
+  const voteCountByProposal = new Map(voteCounts.map((v) => [v.proposalId, Number(v.voteCount)]));
+  return proposals.map((p) => ({ ...p, voteCount: voteCountByProposal.get(p.id) ?? 0 }));
+}
+
 export async function getProposal(id: string) {
   const rows = await db.select().from(grantProposals).where(eq(grantProposals.id, id));
   if (!rows[0]) throw new AppError('NOT_FOUND', 'Proposal not found', 404);
@@ -29,12 +52,15 @@ export async function createProposal(data: NewGrantProposal) {
 }
 
 export async function tallyProposal(proposalId: string) {
-  const rows = await db
-    .select({ weight: votes.weightUsdc })
+  const [agg] = await db
+    .select({
+      voteCount: count(),
+      totalWeightUsdc: sql<string>`coalesce(sum((${votes.weightUsdc})::numeric), 0)::text`,
+    })
     .from(votes)
     .where(eq(votes.proposalId, proposalId));
-  const totalWeight = rows.reduce((acc, v) => acc + Number.parseFloat(v.weight), 0);
-  return { voteCount: rows.length, totalWeightUsdc: totalWeight.toFixed(2) };
+  const totalWeight = Number.parseFloat(agg?.totalWeightUsdc ?? '0').toFixed(2);
+  return { voteCount: Number(agg?.voteCount ?? 0), totalWeightUsdc: totalWeight };
 }
 
 export async function castVote(proposalId: string, contributorId: string) {
@@ -96,13 +122,28 @@ export async function disburseGrant(proposalId: string) {
     throw new AppError('CONFLICT', 'Only approved proposals can be disbursed', 409);
   }
 
+  // Atomically claim the disbursement before paying out, so a concurrent call for the
+  // same proposal cannot also pass the check above and pay the grant a second time.
+  const claimed = await db
+    .update(grantProposals)
+    .set({ status: 'disbursed' })
+    .where(and(eq(grantProposals.id, proposalId), eq(grantProposals.status, 'approved')))
+    .returning();
+  if (!claimed[0]) {
+    throw new AppError(
+      'CONFLICT',
+      'This grant was already disbursed by a concurrent request',
+      409,
+    );
+  }
+
   const txHash = await payFromVault(proposal.payoutAddress, proposal.requestedUsdc);
 
   await withdrawFromVault(proposal.vaultId, proposal.requestedUsdc);
 
   const rows = await db
     .update(grantProposals)
-    .set({ status: 'disbursed', disburseTxHash: txHash })
+    .set({ disburseTxHash: txHash })
     .where(eq(grantProposals.id, proposalId))
     .returning();
 
