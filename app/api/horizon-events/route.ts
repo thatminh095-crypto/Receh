@@ -1,10 +1,10 @@
-import { desc, eq } from 'drizzle-orm';
 import type { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { db } from '@/server/db/client';
 import { horizonEvents } from '@/server/db/schema';
-import { fail, ok } from '@/server/lib/http';
+import { fail, fromError, ok } from '@/server/lib/http';
 import { readSession } from '@/server/lib/session';
+import { listHorizonEvents, recentHorizonEventsForVault } from '@/server/service/horizon-events.service';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,6 +14,13 @@ const insertSchema = z.object({
   amount: z.string().regex(/^\d+(\.\d{1,7})?$/),
   label: z.string().max(256).optional().default(''),
   txHash: z.string().regex(/^[a-f0-9]{64}$/i).optional().default(''),
+});
+
+const listQuerySchema = z.object({
+  limit: z.coerce.number().int().positive().max(100).optional(),
+  cursor: z.string().datetime().optional(),
+  vaultId: z.string().uuid().optional(),
+  stream: z.string().optional(),
 });
 
 function requireSession(req: NextRequest) {
@@ -29,8 +36,8 @@ export async function GET(req: NextRequest) {
     return fail('UNAUTHORIZED', 'Connect with Freighter before reading vault events', 401);
   }
 
-  const vaultId = req.nextUrl.searchParams.get('vaultId');
-  const stream = req.nextUrl.searchParams.get('stream');
+  const params = listQuerySchema.parse(Object.fromEntries(req.nextUrl.searchParams));
+  const { vaultId, stream } = params;
 
   if (stream === '1' && vaultId) {
     const encoder = new TextEncoder();
@@ -41,13 +48,8 @@ export async function GET(req: NextRequest) {
         };
 
         try {
-          const existing = await db
-            .select()
-            .from(horizonEvents)
-            .where(eq(horizonEvents.vaultId, vaultId))
-            .orderBy(desc(horizonEvents.createdAt))
-            .limit(12);
-          for (const evt of existing.reverse()) send(evt);
+          const existing = await recentHorizonEventsForVault(vaultId, 12);
+          for (const evt of existing.slice().reverse()) send(evt);
         } catch {
 
         }
@@ -86,16 +88,7 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const query = vaultId
-    ? db
-        .select()
-        .from(horizonEvents)
-        .where(eq(horizonEvents.vaultId, vaultId))
-        .orderBy(desc(horizonEvents.createdAt))
-        .limit(25)
-    : db.select().from(horizonEvents).orderBy(desc(horizonEvents.createdAt)).limit(25);
-
-  return ok(await query);
+  return ok(await listHorizonEvents(params));
 }
 
 export async function POST(req: NextRequest) {
@@ -121,6 +114,7 @@ export async function POST(req: NextRequest) {
     if (err instanceof z.ZodError) {
       return fail('INVALID_INPUT', err.issues[0]?.message ?? 'Invalid input', 400);
     }
-    return fail('INTERNAL', 'Could not record horizon event', 500);
+    return fromError(err);
   }
 }
+
