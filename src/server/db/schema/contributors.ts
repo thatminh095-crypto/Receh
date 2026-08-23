@@ -1,8 +1,8 @@
 import { integer, pgEnum, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
-export const contributorRoleEnum = pgEnum('receh_contributor_role', ['merchant', 'shopper']);
+export const contributorRoleEnum = pgEnum('contributor_role', ['merchant', 'shopper']);
 
-export const contributors = pgTable('receh_contributors', {
+export const contributors = pgTable('contributors', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
   role: contributorRoleEnum('role').notNull().default('shopper'),

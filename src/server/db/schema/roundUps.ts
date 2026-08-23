@@ -6,7 +6,7 @@ import { vaultPool } from './vaultPool';
  * A single round-up contribution: the spare change from one purchase, routed via SEP-7
  * into the shared vault and attributed to a contributor via their muxed address.
  */
-export const roundUps = pgTable('receh_round_ups', {
+export const roundUps = pgTable('round_ups', {
   id: uuid('id').primaryKey().defaultRandom(),
   contributorId: uuid('contributor_id')
     .notNull()

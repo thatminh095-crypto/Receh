@@ -1,6 +1,6 @@
 import { pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
-export const horizonEvents = pgTable('receh_horizon_events', {
+export const horizonEvents = pgTable('horizon_events', {
   id: uuid('id').primaryKey().defaultRandom(),
   vaultId: uuid('vault_id').notNull(),
   contributorId: uuid('contributor_id'),

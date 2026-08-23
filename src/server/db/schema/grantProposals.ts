@@ -1,7 +1,7 @@
 import { pgEnum, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { vaultPool } from './vaultPool';
 
-export const proposalStatusEnum = pgEnum('receh_proposal_status', [
+export const proposalStatusEnum = pgEnum('proposal_status', [
   'voting',
   'approved',
   'rejected',
@@ -13,7 +13,7 @@ export const proposalStatusEnum = pgEnum('receh_proposal_status', [
  * receive grants from the accrued pool + yield. The winning proposal is disbursed on-chain
  * from the DeFindex vault by the Soroban voting contract.
  */
-export const grantProposals = pgTable('receh_grant_proposals', {
+export const grantProposals = pgTable('grant_proposals', {
   id: uuid('id').primaryKey().defaultRandom(),
   vaultId: uuid('vault_id')
     .notNull()

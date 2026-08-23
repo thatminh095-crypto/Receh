@@ -7,7 +7,7 @@ import { grantProposals } from './grantProposals';
  * contributor's accumulated round-up contributions (captured as weightUsdc at vote time).
  */
 export const votes = pgTable(
-  'receh_votes',
+  'votes',
   {
     id: uuid('id').primaryKey().defaultRandom(),
     proposalId: uuid('proposal_id')

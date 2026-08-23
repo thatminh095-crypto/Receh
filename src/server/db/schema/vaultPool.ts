@@ -5,7 +5,7 @@ import { pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
  * live state of the pool: principal deposited, accrued yield, the variable APY, and the
  * Stellar vault account that all SEP-7 round-ups settle to.
  */
-export const vaultPool = pgTable('receh_vault_pool', {
+export const vaultPool = pgTable('vault_pool', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull().default('Receh Community Vault'),
   vaultAddress: text('vault_address').notNull(),
