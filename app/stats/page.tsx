@@ -2,6 +2,7 @@ import { db } from '@/server/db/client';
 import { contributors, grantProposals, roundUps } from '@/server/db/schema';
 import { desc, eq, sql } from 'drizzle-orm';
 import { getVaultStats } from '@/server/service/vault.service';
+import { readTotalPool } from '@/server/lib/recehPoolContract';
 
 export const dynamic = 'force-dynamic';
 
@@ -83,6 +84,13 @@ export default async function StatsPage() {
     recentRoundUps = [];
   }
 
+  let poolBalanceUsdc = '0.00';
+  try {
+    poolBalanceUsdc = (Number(await readTotalPool()) / 1e7).toFixed(2);
+  } catch {
+    poolBalanceUsdc = '0.00';
+  }
+
   const cards: StatCard[] = [
     { label: 'Connected wallets', value: String(uniqueWallets), hint: 'distinct Freighter accounts' },
     { label: 'Contributors', value: String(contributorRows), hint: 'people registered in the pool' },
@@ -90,6 +98,7 @@ export default async function StatsPage() {
     { label: 'Pool principal', value: fmtUsdc(vault?.principalUsdc), hint: 'USDC in the vault' },
     { label: 'Pool total', value: fmtUsdc(vault?.poolTotalUsdc), hint: 'principal + accrued yield' },
     { label: 'Accrued yield', value: fmtUsdc(vault?.accruedYieldUsdc), hint: 'simulated 8.5% APY' },
+    { label: 'Pool balance (on-chain)', value: `${poolBalanceUsdc} USDC`, hint: 'Read live from the RecehPool contract on mainnet' },
   ];
 
   return (
