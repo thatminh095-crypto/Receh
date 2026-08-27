@@ -15,6 +15,7 @@ import {
   Users,
   Vote,
   Wallet,
+  Zap,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
@@ -93,6 +94,7 @@ export function RecehClient(props: {
     props.contributors.find((c) => c.role === 'shopper')?.id ?? props.contributors[0]?.id ?? '',
   );
   const [busy, setBusy] = useState(false);
+  const [busyXlm, setBusyXlm] = useState(false);
   const [closing, setClosing] = useState(false);
   const [enablingTrust, setEnablingTrust] = useState(false);
   const [walletKey, setWalletKey] = useState<string | null>(null);
@@ -257,6 +259,77 @@ export function RecehClient(props: {
     const delta = Math.ceil(amt) - amt;
     return Math.round(delta * 100) / 100;
   }, [purchase]);
+
+  async function handleRoundUpXlm() {
+    if (!walletKey) {
+      toast.error('Connect your Freighter wallet first');
+      return;
+    }
+    if (!activeContributor) {
+      toast.error('Pick a contributor first');
+      return;
+    }
+    if (contribution <= 0) {
+      toast.error('Enter a purchase with spare change (not a whole number)');
+      return;
+    }
+    setBusyXlm(true);
+    try {
+      const buildRes = await fetch('/api/roundups/build-xlm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contributorPublicKey: walletKey,
+          contributorId: activeContributor,
+          purchaseUsdc: purchase,
+        }),
+      });
+      const buildJson = await buildRes.json();
+      if (!buildJson.ok) throw new Error(buildJson.error?.message ?? 'Could not price the XLM route');
+
+      const signModule: {
+        signTransaction?: (
+          xdr: string,
+          opts?: { networkPassphrase?: string; address?: string },
+        ) => Promise<{ signedTxXdr?: string }>;
+      } = (await import('@stellar/freighter-api').catch(() => ({}))) as never;
+      const signed = await signModule.signTransaction?.(buildJson.data.xdr, {
+        networkPassphrase: buildJson.data.networkPassphrase,
+        address: walletKey,
+      });
+      if (!signed?.signedTxXdr) {
+        toast.error('Freighter did not return a signed transaction.');
+        return;
+      }
+
+      const submitRes = await fetch('/api/roundups/submit-xlm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ signedTxXdr: signed.signedTxXdr }),
+      });
+      const submitJson = await submitRes.json();
+      if (!submitJson.ok) throw new Error(submitJson.error?.message ?? 'XLM payment failed to submit');
+
+      const recordRes = await fetch('/api/roundups/record-xlm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contributorId: activeContributor,
+          purchaseUsdc: purchase,
+          txHash: submitJson.data.txHash,
+        }),
+      });
+      const recordJson = await recordRes.json();
+      if (!recordJson.ok) throw new Error(recordJson.error?.message ?? 'Round-up could not be recorded');
+
+      toast.success(`Paid with XLM — routed ${fmtIdr(recordJson.data.contribution)} into the vault.`);
+      await refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'XLM round-up failed');
+    } finally {
+      setBusyXlm(false);
+    }
+  }
 
   async function handleRoundUp() {
     if (!activeContributor) {
@@ -627,9 +700,24 @@ export function RecehClient(props: {
               <div className="flex flex-col items-end gap-2">
                 <button
                   type="button"
+                  data-testid="roundup-xlm-btn"
+                  onClick={handleRoundUpXlm}
+                  disabled={busyXlm || busy}
+                  className="inline-flex items-center justify-center gap-2 bg-amber-500 text-white font-semibold px-6 h-12 rounded-xl text-base hover:bg-amber-600 transition-colors disabled:opacity-60"
+                  title="Pay with native XLM — auto-converted to USDC on-chain, one signature, no trustline needed"
+                >
+                  {busyXlm ? (
+                    <Loader2 className="w-5 h-5 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Zap className="w-5 h-5" aria-hidden="true" />
+                  )}
+                  Round up with XLM
+                </button>
+                <button
+                  type="button"
                   data-testid="roundup-btn"
                   onClick={handleRoundUp}
-                  disabled={busy}
+                  disabled={busy || busyXlm}
                   className="inline-flex items-center justify-center gap-2 bg-emerald-600 text-white font-semibold px-6 h-12 rounded-xl text-base hover:bg-emerald-700 transition-colors disabled:opacity-60"
                 >
                   {busy ? (
@@ -637,7 +725,7 @@ export function RecehClient(props: {
                   ) : (
                     <Coins className="w-5 h-5" aria-hidden="true" />
                   )}
-                  Round up &amp; route
+                  Round up &amp; route (manual USDC)
                 </button>
                 <button
                   type="button"
