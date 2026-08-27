@@ -24,6 +24,11 @@ const envSchema = z.object({
   USDC_ASSET_ISSUER_TESTNET: z
     .string()
     .default('GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5'),
+  // Circle's real USDC issuer on Stellar mainnet — see
+  // https://developers.circle.com/stablecoins/usdc-contract-addresses
+  USDC_ASSET_ISSUER_MAINNET: z
+    .string()
+    .default('GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN'),
 
   RECEH_POOL_CONTRACT_ID: z
     .string()
