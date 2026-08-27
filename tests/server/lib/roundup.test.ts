@@ -24,6 +24,13 @@ describe('roundUpDelta', () => {
     expect(roundUpDelta(-3)).toBe('0.00');
   });
 
+  it('supports a custom decimals precision (e.g. 7dp for XLM)', () => {
+    expect(roundUpDelta('10.5', 1, 7)).toBe('0.5000000');
+    expect(roundUpDelta('10.1234567', 1, 7)).toBe('0.8765433');
+    expect(roundUpDelta('11', 1, 7)).toBe('0.0000000');
+    expect(roundUpDelta('abc', 1, 7)).toBe('0.0000000');
+  });
+
   it('supports a custom increment', () => {
     // round up to next 5 USDC
     expect(roundUpDelta('12.00', 5)).toBe('3.00');
@@ -38,6 +45,9 @@ describe('roundedTotal', () => {
   });
   it('handles invalid input', () => {
     expect(roundedTotal('xyz')).toBe('0.00');
+  });
+  it('supports a custom decimals precision', () => {
+    expect(roundedTotal('10.5', 1, 7)).toBe('11.0000000');
   });
 });
 

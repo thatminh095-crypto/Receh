@@ -3,24 +3,29 @@
  * the difference is the spare-change contribution routed into the shared yield vault.
  */
 
-/** Round a purchase amount up to the next whole USDC. Returns the spare-change delta as a string. */
-export function roundUpDelta(purchaseUsdc: string | number, increment = 1): string {
+/**
+ * Round a purchase amount up to the next whole unit. Returns the spare-change delta
+ * as a string. `decimals` matches the asset's precision — 2 for USDC (default), 7 for
+ * native XLM amounts.
+ */
+export function roundUpDelta(purchaseUsdc: string | number, increment = 1, decimals = 2): string {
   const amount = typeof purchaseUsdc === 'number' ? purchaseUsdc : Number.parseFloat(purchaseUsdc);
-  if (!Number.isFinite(amount) || amount < 0) return '0.00';
+  if (!Number.isFinite(amount) || amount < 0) return (0).toFixed(decimals);
   const inc = increment > 0 ? increment : 1;
   const rounded = Math.ceil(amount / inc) * inc;
   const delta = rounded - amount;
   // Avoid floating point dust; clamp tiny residuals to 0.
-  const cleaned = Math.round(delta * 100) / 100;
-  return cleaned.toFixed(2);
+  const scale = 10 ** decimals;
+  const cleaned = Math.round(delta * scale) / scale;
+  return cleaned.toFixed(decimals);
 }
 
 /** The total a shopper pays after round-up (purchase + spare change). */
-export function roundedTotal(purchaseUsdc: string | number, increment = 1): string {
+export function roundedTotal(purchaseUsdc: string | number, increment = 1, decimals = 2): string {
   const amount = typeof purchaseUsdc === 'number' ? purchaseUsdc : Number.parseFloat(purchaseUsdc);
-  if (!Number.isFinite(amount) || amount < 0) return '0.00';
-  const delta = Number.parseFloat(roundUpDelta(amount, increment));
-  return (amount + delta).toFixed(2);
+  if (!Number.isFinite(amount) || amount < 0) return (0).toFixed(decimals);
+  const delta = Number.parseFloat(roundUpDelta(amount, increment, decimals));
+  return (amount + delta).toFixed(decimals);
 }
 
 /** Indonesian Rupiah per 1 USDC (demo rate). */

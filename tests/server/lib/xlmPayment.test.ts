@@ -3,6 +3,7 @@ import { Account, Asset } from '@stellar/stellar-sdk';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const strictReceivePathsCall = vi.fn();
+const strictSendPathsCall = vi.fn();
 const loadAccount = vi.fn();
 const transactionCall = vi.fn();
 const operationsCall = vi.fn();
@@ -15,6 +16,7 @@ vi.mock('@/server/config/stellar', () => ({
     usdcIssuer: 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5',
     server: {
       strictReceivePaths: () => ({ call: strictReceivePathsCall }),
+      strictSendPaths: () => ({ call: strictSendPathsCall }),
       loadAccount: (pk: string) => loadAccount(pk),
       transactions: () => ({ transaction: (id: string) => ({ call: () => transactionCall(id) }) }),
       operations: () => ({ forTransaction: (id: string) => ({ call: () => operationsCall(id) }) }),
@@ -23,8 +25,15 @@ vi.mock('@/server/config/stellar', () => ({
   },
 }));
 
-const { quoteXlmToDestPath, buildXlmToUsdcPayment, verifyXlmRoundUpOnChain, submitSignedXlmPayment } =
-  await import('@/server/lib/xlmPayment');
+const {
+  quoteXlmToDestPath,
+  buildXlmToUsdcPayment,
+  verifyXlmRoundUpOnChain,
+  submitSignedXlmPayment,
+  quoteXlmSendPath,
+  buildXlmStrictSendPayment,
+  verifyXlmPurchaseOnChain,
+} = await import('@/server/lib/xlmPayment');
 
 const VAULT = 'GBL5RJKF4QNJ4ZPLJZ7PS7K5A4J44VEZJRV2CRTFFDRVSY2N76AIIE47';
 const PAYER = 'GAEIMHCAB46FUYMWWVXAHSMOBK7VF7PKGX2OIBOG44K5FGL4T7NJPRC3';
@@ -32,6 +41,7 @@ const USDC = new Asset('USDC', 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH
 
 beforeEach(() => {
   strictReceivePathsCall.mockReset();
+  strictSendPathsCall.mockReset();
   loadAccount.mockReset();
   transactionCall.mockReset();
   operationsCall.mockReset();
@@ -128,7 +138,10 @@ describe('verifyXlmRoundUpOnChain', () => {
   it('rejects an unsuccessful transaction', async () => {
     transactionCall.mockResolvedValueOnce({ successful: false });
     const result = await verifyXlmRoundUpOnChain(okParams);
-    expect(result).toMatchObject({ verified: false, reason: expect.stringContaining('not successful') });
+    expect(result).toMatchObject({
+      verified: false,
+      reason: expect.stringContaining('not successful'),
+    });
   });
 
   it('rejects when no operation pays the vault destination', async () => {
@@ -152,7 +165,10 @@ describe('verifyXlmRoundUpOnChain', () => {
       ],
     });
     const result = await verifyXlmRoundUpOnChain(okParams);
-    expect(result).toMatchObject({ verified: false, reason: expect.stringContaining('wrong asset') });
+    expect(result).toMatchObject({
+      verified: false,
+      reason: expect.stringContaining('wrong asset'),
+    });
   });
 
   it('rejects when the received amount is below the minimum', async () => {
@@ -171,7 +187,10 @@ describe('verifyXlmRoundUpOnChain', () => {
       ],
     });
     const result = await verifyXlmRoundUpOnChain(okParams);
-    expect(result).toMatchObject({ verified: false, reason: expect.stringContaining('less than required') });
+    expect(result).toMatchObject({
+      verified: false,
+      reason: expect.stringContaining('less than required'),
+    });
   });
 });
 
@@ -195,5 +214,113 @@ describe('submitSignedXlmPayment', () => {
     });
     submitTransaction.mockRejectedValueOnce(new Error('tx_failed'));
     await expect(submitSignedXlmPayment(built.xdr)).rejects.toMatchObject({ code: 'CONFLICT' });
+  });
+});
+
+describe('quoteXlmSendPath', () => {
+  it('maps the best Horizon strict-send path record', async () => {
+    strictSendPathsCall.mockResolvedValueOnce({
+      records: [{ path: [], destination_amount: '0.8750030' }],
+    });
+    const quote = await quoteXlmSendPath(USDC, '0.5000000');
+    expect(quote.destAmount).toBe('0.8750030');
+    expect(quote.path).toEqual([]);
+  });
+
+  it('throws CONFLICT when no path has liquidity', async () => {
+    strictSendPathsCall.mockResolvedValueOnce({ records: [] });
+    await expect(quoteXlmSendPath(USDC, '0.5')).rejects.toMatchObject({ code: 'CONFLICT' });
+  });
+});
+
+describe('buildXlmStrictSendPayment', () => {
+  it('builds a PathPaymentStrictSend with a slippage-padded destMin', async () => {
+    strictSendPathsCall.mockResolvedValueOnce({
+      records: [{ path: [], destination_amount: '1.0000000' }],
+    });
+    loadAccount.mockResolvedValueOnce(new Account(PAYER, '100'));
+
+    const result = await buildXlmStrictSendPayment({
+      sourcePublicKey: PAYER,
+      destination: VAULT,
+      destAsset: USDC,
+      sendAmount: '0.5000000',
+    });
+
+    expect(result.expectedDestAmount).toBe('1.0000000');
+    // Default 150bps slippage floor: 1.00 * 0.985 = 0.985
+    expect(result.destMin).toBe('0.9850000');
+    expect(result.xdr).toContain('AAAA');
+  });
+
+  it('rejects a non-positive sendAmount without calling Horizon', async () => {
+    await expect(
+      buildXlmStrictSendPayment({
+        sourcePublicKey: PAYER,
+        destination: VAULT,
+        destAsset: USDC,
+        sendAmount: '0',
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_INPUT' });
+    expect(strictSendPathsCall).not.toHaveBeenCalled();
+  });
+});
+
+describe('verifyXlmPurchaseOnChain', () => {
+  const MUXED_DEST = 'MBL5RJKF4QNJ4ZPLJZ7PS7K5A4J44VEZJRV2CRTFFDRVSY2N76AIIAAAAAAAAAAAARGXI';
+  const okParams = {
+    txHash: 'b'.repeat(64),
+    destination: MUXED_DEST,
+    destAssetCode: 'USDC',
+    destAssetIssuer: 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5',
+    minDestAmount: '0.80',
+  };
+
+  it('verifies a successful matching path_payment_strict_send and returns the real amount', async () => {
+    transactionCall.mockResolvedValueOnce({ successful: true });
+    operationsCall.mockResolvedValueOnce({
+      records: [
+        {
+          type: 'path_payment_strict_send',
+          to: VAULT,
+          to_muxed: MUXED_DEST,
+          asset_type: 'credit_alphanum4',
+          asset_code: 'USDC',
+          asset_issuer: 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5',
+          amount: '0.8750030',
+        },
+      ],
+    });
+    const result = await verifyXlmPurchaseOnChain(okParams);
+    expect(result).toEqual({ verified: true, actualDestAmount: '0.8750030' });
+  });
+
+  it('rejects when the settled amount is below the floor', async () => {
+    transactionCall.mockResolvedValueOnce({ successful: true });
+    operationsCall.mockResolvedValueOnce({
+      records: [
+        {
+          type: 'path_payment_strict_send',
+          to: VAULT,
+          to_muxed: MUXED_DEST,
+          asset_type: 'credit_alphanum4',
+          asset_code: 'USDC',
+          asset_issuer: 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5',
+          amount: '0.10',
+        },
+      ],
+    });
+    const result = await verifyXlmPurchaseOnChain(okParams);
+    expect(result).toMatchObject({
+      verified: false,
+      reason: expect.stringContaining('less than required'),
+    });
+  });
+
+  it('rejects when no strict-send operation matches the vault destination', async () => {
+    transactionCall.mockResolvedValueOnce({ successful: true });
+    operationsCall.mockResolvedValueOnce({ records: [] });
+    const result = await verifyXlmPurchaseOnChain(okParams);
+    expect(result.verified).toBe(false);
   });
 });

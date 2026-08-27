@@ -90,11 +90,14 @@ export function RecehClient(props: {
   const [contributors] = useState(props.contributors);
 
   const [purchase, setPurchase] = useState('4.30');
+  const [purchaseXlm, setPurchaseXlm] = useState('10.5');
+  const [purchaseMode, setPurchaseMode] = useState<'usdc' | 'xlm'>('usdc');
   const [activeContributor, setActiveContributor] = useState(
     props.contributors.find((c) => c.role === 'shopper')?.id ?? props.contributors[0]?.id ?? '',
   );
   const [busy, setBusy] = useState(false);
   const [busyXlm, setBusyXlm] = useState(false);
+  const [busyXlmPurchase, setBusyXlmPurchase] = useState(false);
   const [closing, setClosing] = useState(false);
   const [enablingTrust, setEnablingTrust] = useState(false);
   const [walletKey, setWalletKey] = useState<string | null>(null);
@@ -260,6 +263,13 @@ export function RecehClient(props: {
     return Math.round(delta * 100) / 100;
   }, [purchase]);
 
+  const contributionXlm = useMemo(() => {
+    const amt = Number.parseFloat(purchaseXlm);
+    if (!Number.isFinite(amt) || amt < 0) return 0;
+    const delta = Math.ceil(amt) - amt;
+    return Math.round(delta * 1e7) / 1e7;
+  }, [purchaseXlm]);
+
   async function handleRoundUpXlm() {
     if (!walletKey) {
       toast.error('Connect your Freighter wallet first');
@@ -328,6 +338,79 @@ export function RecehClient(props: {
       toast.error(err instanceof Error ? err.message : 'XLM round-up failed');
     } finally {
       setBusyXlm(false);
+    }
+  }
+
+  async function handleRoundUpXlmPurchase() {
+    if (!walletKey) {
+      toast.error('Connect your Freighter wallet first');
+      return;
+    }
+    if (!activeContributor) {
+      toast.error('Pick a contributor first');
+      return;
+    }
+    if (contributionXlm <= 0) {
+      toast.error('Enter a purchase with spare change (not a whole XLM amount)');
+      return;
+    }
+    setBusyXlmPurchase(true);
+    try {
+      const buildRes = await fetch('/api/roundups/build-xlm-purchase', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contributorPublicKey: walletKey,
+          contributorId: activeContributor,
+          purchaseXlm,
+        }),
+      });
+      const buildJson = await buildRes.json();
+      if (!buildJson.ok) throw new Error(buildJson.error?.message ?? 'Could not price the XLM purchase');
+
+      const signModule: {
+        signTransaction?: (
+          xdr: string,
+          opts?: { networkPassphrase?: string; address?: string },
+        ) => Promise<{ signedTxXdr?: string }>;
+      } = (await import('@stellar/freighter-api').catch(() => ({}))) as never;
+      const signed = await signModule.signTransaction?.(buildJson.data.xdr, {
+        networkPassphrase: buildJson.data.networkPassphrase,
+        address: walletKey,
+      });
+      if (!signed?.signedTxXdr) {
+        toast.error('Freighter did not return a signed transaction.');
+        return;
+      }
+
+      const submitRes = await fetch('/api/roundups/submit-xlm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ signedTxXdr: signed.signedTxXdr }),
+      });
+      const submitJson = await submitRes.json();
+      if (!submitJson.ok) throw new Error(submitJson.error?.message ?? 'XLM payment failed to submit');
+
+      const recordRes = await fetch('/api/roundups/record-xlm-purchase', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contributorId: activeContributor,
+          purchaseXlm,
+          txHash: submitJson.data.txHash,
+        }),
+      });
+      const recordJson = await recordRes.json();
+      if (!recordJson.ok) throw new Error(recordJson.error?.message ?? 'Round-up could not be recorded');
+
+      toast.success(
+        `XLM purchase rounded up — routed ${fmtIdr(recordJson.data.contribution)} into the vault.`,
+      );
+      await refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'XLM purchase round-up failed');
+    } finally {
+      setBusyXlmPurchase(false);
     }
   }
 
@@ -669,64 +752,132 @@ export function RecehClient(props: {
                 )}
               </div>
               <div>
-                <label
-                  htmlFor="purchase"
-                  className="block text-sm font-medium text-slate-700 mb-1.5"
-                >
-                  Purchase amount (USDC)
-                </label>
-                <input
-                  id="purchase"
-                  data-testid="input-purchase"
-                  inputMode="decimal"
-                  value={purchase}
-                  onChange={(e) => setPurchase(e.target.value)}
-                  className="w-full h-12 rounded-xl border border-slate-300 px-3 text-base text-slate-800 bg-white tabular-nums"
-                />
+                <div className="flex items-center justify-between mb-1.5">
+                  <label htmlFor="purchase" className="block text-sm font-medium text-slate-700">
+                    Purchase amount
+                  </label>
+                  <div
+                    data-testid="purchase-mode-toggle"
+                    className="inline-flex rounded-lg border border-slate-200 p-0.5 text-xs font-semibold"
+                  >
+                    <button
+                      type="button"
+                      data-testid="purchase-mode-usdc"
+                      onClick={() => setPurchaseMode('usdc')}
+                      className={`px-2.5 h-7 rounded-md transition-colors ${
+                        purchaseMode === 'usdc' ? 'bg-emerald-600 text-white' : 'text-slate-500'
+                      }`}
+                    >
+                      USDC
+                    </button>
+                    <button
+                      type="button"
+                      data-testid="purchase-mode-xlm"
+                      onClick={() => setPurchaseMode('xlm')}
+                      className={`px-2.5 h-7 rounded-md transition-colors ${
+                        purchaseMode === 'xlm' ? 'bg-amber-500 text-white' : 'text-slate-500'
+                      }`}
+                    >
+                      XLM
+                    </button>
+                  </div>
+                </div>
+                {purchaseMode === 'usdc' ? (
+                  <input
+                    id="purchase"
+                    data-testid="input-purchase"
+                    inputMode="decimal"
+                    value={purchase}
+                    onChange={(e) => setPurchase(e.target.value)}
+                    className="w-full h-12 rounded-xl border border-slate-300 px-3 text-base text-slate-800 bg-white tabular-nums"
+                  />
+                ) : (
+                  <input
+                    id="purchase"
+                    data-testid="input-purchase-xlm"
+                    inputMode="decimal"
+                    value={purchaseXlm}
+                    onChange={(e) => setPurchaseXlm(e.target.value)}
+                    className="w-full h-12 rounded-xl border border-slate-300 px-3 text-base text-slate-800 bg-white tabular-nums"
+                  />
+                )}
               </div>
             </div>
 
             <div className="mt-5 flex items-center justify-between bg-emerald-50 rounded-2xl px-5 py-4">
-              <div>
-                <div className="text-sm text-slate-600">Spare change to vault</div>
-                <div
-                  data-testid="contribution-preview"
-                  className="text-2xl font-bold text-emerald-700 tabular-nums"
-                >
-                  {contribution.toFixed(2)} USDC
+              {purchaseMode === 'usdc' ? (
+                <div>
+                  <div className="text-sm text-slate-600">Spare change to vault</div>
+                  <div
+                    data-testid="contribution-preview"
+                    className="text-2xl font-bold text-emerald-700 tabular-nums"
+                  >
+                    {contribution.toFixed(2)} USDC
+                  </div>
+                  <div className="text-sm text-slate-500">{fmtIdr(contribution)}</div>
                 </div>
-                <div className="text-sm text-slate-500">{fmtIdr(contribution)}</div>
-              </div>
+              ) : (
+                <div>
+                  <div className="text-sm text-slate-600">Spare change to vault</div>
+                  <div
+                    data-testid="contribution-preview-xlm"
+                    className="text-2xl font-bold text-amber-600 tabular-nums"
+                  >
+                    {contributionXlm.toFixed(7)} XLM
+                  </div>
+                  <div className="text-sm text-slate-500">converted to USDC on-chain</div>
+                </div>
+              )}
               <div className="flex flex-col items-end gap-2">
-                <button
-                  type="button"
-                  data-testid="roundup-xlm-btn"
-                  onClick={handleRoundUpXlm}
-                  disabled={busyXlm || busy}
-                  className="inline-flex items-center justify-center gap-2 bg-amber-500 text-white font-semibold px-6 h-12 rounded-xl text-base hover:bg-amber-600 transition-colors disabled:opacity-60"
-                  title="Pay with native XLM — auto-converted to USDC on-chain, one signature, no trustline needed"
-                >
-                  {busyXlm ? (
-                    <Loader2 className="w-5 h-5 animate-spin" aria-hidden="true" />
-                  ) : (
-                    <Zap className="w-5 h-5" aria-hidden="true" />
-                  )}
-                  Round up with XLM
-                </button>
-                <button
-                  type="button"
-                  data-testid="roundup-btn"
-                  onClick={handleRoundUp}
-                  disabled={busy || busyXlm}
-                  className="inline-flex items-center justify-center gap-2 bg-emerald-600 text-white font-semibold px-6 h-12 rounded-xl text-base hover:bg-emerald-700 transition-colors disabled:opacity-60"
-                >
-                  {busy ? (
-                    <Loader2 className="w-5 h-5 animate-spin" aria-hidden="true" />
-                  ) : (
-                    <Coins className="w-5 h-5" aria-hidden="true" />
-                  )}
-                  Round up &amp; route (manual USDC)
-                </button>
+                {purchaseMode === 'usdc' ? (
+                  <>
+                    <button
+                      type="button"
+                      data-testid="roundup-xlm-btn"
+                      onClick={handleRoundUpXlm}
+                      disabled={busyXlm || busy}
+                      className="inline-flex items-center justify-center gap-2 bg-amber-500 text-white font-semibold px-6 h-12 rounded-xl text-base hover:bg-amber-600 transition-colors disabled:opacity-60"
+                      title="Pay with native XLM — auto-converted to USDC on-chain, one signature, no trustline needed"
+                    >
+                      {busyXlm ? (
+                        <Loader2 className="w-5 h-5 animate-spin" aria-hidden="true" />
+                      ) : (
+                        <Zap className="w-5 h-5" aria-hidden="true" />
+                      )}
+                      Round up with XLM
+                    </button>
+                    <button
+                      type="button"
+                      data-testid="roundup-btn"
+                      onClick={handleRoundUp}
+                      disabled={busy || busyXlm}
+                      className="inline-flex items-center justify-center gap-2 bg-emerald-600 text-white font-semibold px-6 h-12 rounded-xl text-base hover:bg-emerald-700 transition-colors disabled:opacity-60"
+                    >
+                      {busy ? (
+                        <Loader2 className="w-5 h-5 animate-spin" aria-hidden="true" />
+                      ) : (
+                        <Coins className="w-5 h-5" aria-hidden="true" />
+                      )}
+                      Round up &amp; route (manual USDC)
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    data-testid="roundup-xlm-purchase-btn"
+                    onClick={handleRoundUpXlmPurchase}
+                    disabled={busyXlmPurchase}
+                    className="inline-flex items-center justify-center gap-2 bg-amber-500 text-white font-semibold px-6 h-12 rounded-xl text-base hover:bg-amber-600 transition-colors disabled:opacity-60"
+                    title="Purchase and round-up both denominated in XLM — the vault still receives USDC"
+                  >
+                    {busyXlmPurchase ? (
+                      <Loader2 className="w-5 h-5 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <Zap className="w-5 h-5" aria-hidden="true" />
+                    )}
+                    Round up XLM purchase
+                  </button>
+                )}
                 <button
                   type="button"
                   data-testid="enable-usdc-btn"
