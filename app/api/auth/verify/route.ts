@@ -26,10 +26,11 @@ export async function POST(req: NextRequest) {
       return fail('INVALID_PUBLIC_KEY', 'publicKey is not a valid Stellar account', 400);
     }
 
-    const message = Buffer.concat([
-      Buffer.from('Stellar Signed Message:\n', 'utf8'),
-      Buffer.from(nonce, 'utf8'),
-    ]);
+    // Freighter's signMessage signs the raw UTF-8 bytes of the string passed in;
+    // the client sends the nonce verbatim, so verify against the same raw bytes.
+    // We used to prepend "Stellar Signed Message:\n" here, but the client never
+    // signed that prefix and every verify returned 401 (Invalid signature).
+    const message = Buffer.from(nonce, 'utf8');
     const isValid = keypair.verify(message, Buffer.from(signedNonce, 'base64'));
     if (!isValid) {
       return fail('UNAUTHORIZED', 'Invalid signature for challenge nonce', 401);
