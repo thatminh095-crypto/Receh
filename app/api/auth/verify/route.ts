@@ -6,6 +6,7 @@ import { db } from '@/server/db/client';
 import { contributors } from '@/server/db/schema';
 import { fail, fromError, ok } from '@/server/lib/http';
 import { signSession } from '@/server/lib/session';
+import { verifyFreighterSignature } from '@/server/lib/stellar-message';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,12 +27,8 @@ export async function POST(req: NextRequest) {
       return fail('INVALID_PUBLIC_KEY', 'publicKey is not a valid Stellar account', 400);
     }
 
-    // Freighter's signMessage signs the raw UTF-8 bytes of the string passed in;
-    // the client sends the nonce verbatim, so verify against the same raw bytes.
-    // We used to prepend "Stellar Signed Message:\n" here, but the client never
-    // signed that prefix and every verify returned 401 (Invalid signature).
-    const message = Buffer.from(nonce, 'utf8');
-    const isValid = keypair.verify(message, Buffer.from(signedNonce, 'base64'));
+    // SEP-53 signs sha256("Stellar Signed Message:\n" + UTF-8 message bytes).
+    const isValid = verifyFreighterSignature(keypair, nonce, signedNonce);
     if (!isValid) {
       return fail('UNAUTHORIZED', 'Invalid signature for challenge nonce', 401);
     }
