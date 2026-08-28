@@ -137,23 +137,26 @@ describe('roundup.service', () => {
     const out = await buildNativeXlmRoundUp(
       'GAEIMHCAB46FUYMWWVXAHSMOBK7VF7PKGX2OIBOG44K5FGL4T7NJPRC3',
       'c1',
-      '4.3001234',
+      '10.5',
     );
-    expect(out.contributionXlm).toBe('0.0008766');
-    expect(out.roundedTotalXlm).toBe('4.3010000');
+    expect(out.contributionXlm).toBe('0.0010000');
+    expect(out.roundedTotalXlm).toBe('10.5010000');
     expect(out.muxedAddress.startsWith('M')).toBe(true);
     expect(out.xdr).toBe('AAAA-native-payment');
   });
 
-  it('buildNativeXlmRoundUp rejects a whole-number purchase (no spare change)', async () => {
+  it('buildNativeXlmRoundUp rejects a purchase below the 0.001 XLM minimum', async () => {
     q.results = [[contributor()]];
     await expect(
       buildNativeXlmRoundUp(
         'GAEIMHCAB46FUYMWWVXAHSMOBK7VF7PKGX2OIBOG44K5FGL4T7NJPRC3',
         'c1',
-        '5.00',
+        '0.0005',
       ),
-    ).rejects.toMatchObject({ code: 'INVALID_INPUT' });
+    ).rejects.toMatchObject({
+      code: 'INVALID_INPUT',
+      message: expect.stringContaining('at least 0.001'),
+    });
   });
 
   it('recordNativeXlmRoundUp verifies on-chain, persists, attributes, and deposits', async () => {
@@ -167,6 +170,9 @@ describe('roundup.service', () => {
       txHash: 'a'.repeat(64),
     });
     expect(verifyNativeXlmPaymentOnChain).toHaveBeenCalledTimes(1);
+    expect(verifyNativeXlmPaymentOnChain).toHaveBeenCalledWith(
+      expect.objectContaining({ minAmount: '0.0010000' }),
+    );
     expect(out.contribution).toBe('0.70');
     expect(depositToVault).toHaveBeenCalledWith('v1', '0.70');
     // Atomic SQL update — not a read-then-write literal, so we assert the shape of the
@@ -228,11 +234,18 @@ describe('roundup.service', () => {
     ).rejects.toMatchObject({ code: 'INVALID_INPUT' });
   });
 
-  it('recordNativeXlmRoundUp rejects a whole-number purchase (no spare change)', async () => {
+  it('recordNativeXlmRoundUp rejects a purchase below the 0.001 XLM minimum', async () => {
     q.results = [[contributor()]];
     await expect(
-      recordNativeXlmRoundUp({ contributorId: 'c1', purchaseXlm: '5.00', txHash: 'a'.repeat(64) }),
-    ).rejects.toMatchObject({ code: 'INVALID_INPUT' });
+      recordNativeXlmRoundUp({
+        contributorId: 'c1',
+        purchaseXlm: '0.0005',
+        txHash: 'a'.repeat(64),
+      }),
+    ).rejects.toMatchObject({
+      code: 'INVALID_INPUT',
+      message: expect.stringContaining('at least 0.001'),
+    });
   });
 
   it('listRoundUps returns recent rows', async () => {

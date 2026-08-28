@@ -10,7 +10,6 @@ const schema = z.object({
   contributorPublicKey: z.string().length(56).startsWith('G'),
   contributorId: z.string().uuid(),
   purchaseXlm: z.string().regex(/^\d+(\.\d{1,7})?$/),
-  increment: z.number().positive().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -20,7 +19,6 @@ export async function POST(req: NextRequest) {
       body.contributorPublicKey,
       body.contributorId,
       body.purchaseXlm,
-      body.increment ?? 0.001,
     );
     return ok({ ...payment, networkPassphrase: stellar.passphrase });
   } catch (err) {

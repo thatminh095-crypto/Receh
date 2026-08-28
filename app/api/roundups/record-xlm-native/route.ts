@@ -8,7 +8,6 @@ export const dynamic = 'force-dynamic';
 const schema = z.object({
   contributorId: z.string().uuid(),
   purchaseXlm: z.string().regex(/^\d+(\.\d{1,7})?$/),
-  increment: z.number().positive().optional(),
   txHash: z.string().regex(/^[a-f0-9]{64}$/i, 'txHash must be a 64-char hex Horizon hash'),
 });
 

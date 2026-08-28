@@ -4,9 +4,17 @@ import { contributors, type NewContributor, roundUps } from '@/server/db/schema'
 import { AppError } from '@/server/lib/http';
 import { createMuxedAddress } from '@/server/lib/muxed';
 import { buildRecordRoundupXdr } from '@/server/lib/recehPoolContract';
-import { roundedTotal, roundUpDelta } from '@/server/lib/roundup';
 import { buildNativeXlmPayment, verifyNativeXlmPaymentOnChain } from '@/server/lib/xlmPayment';
 import { depositToVault, getVault } from './vault.service';
+
+/**
+ * Flat per-round-up contribution. The round-up flow used to compute a variable
+ * spare-change delta — that broke in practice because nearly every human-typed
+ * purchase amount is already a multiple of 0.001, so the delta collapsed to 0
+ * and the round-up got rejected. Every round-up now contributes exactly this
+ * amount, regardless of the purchase.
+ */
+const FLAT_CONTRIBUTION_XLM = '0.0010000';
 
 export async function listContributors() {
   return db.select().from(contributors).orderBy(desc(contributors.totalContributedUsdc));
@@ -108,18 +116,14 @@ export async function buildNativeXlmRoundUp(
   contributorPublicKey: string,
   contributorId: string,
   purchaseXlm: string,
-  increment = 0.001,
 ) {
+  const purchaseAmt = Number.parseFloat(purchaseXlm);
+  if (!(purchaseAmt >= 0.001)) {
+    throw new AppError('INVALID_INPUT', 'Purchase must be at least 0.001 XLM', 400);
+  }
   const contributor = await getContributor(contributorId);
   const vault = await getVault();
-  const contributionXlm = roundUpDelta(purchaseXlm, increment, 7);
-  if (Number.parseFloat(contributionXlm) <= 0) {
-    throw new AppError(
-      'INVALID_INPUT',
-      'Purchase is already a whole XLM amount — no spare change',
-      400,
-    );
-  }
+  const contributionXlm = FLAT_CONTRIBUTION_XLM;
 
   // Fail closed: never send a round-up to the shared base address just because a
   // contributor's muxed encoding failed — that would let one contributor's payment
@@ -136,7 +140,7 @@ export async function buildNativeXlmRoundUp(
   return {
     ...payment,
     contributionXlm,
-    roundedTotalXlm: roundedTotal(purchaseXlm, increment, 7),
+    roundedTotalXlm: (purchaseAmt + Number.parseFloat(FLAT_CONTRIBUTION_XLM)).toFixed(7),
     purchaseXlm,
     muxedAddress,
     contributor,
@@ -152,10 +156,9 @@ export async function buildNativeXlmRoundUp(
 export async function recordNativeXlmRoundUp(params: {
   contributorId: string;
   purchaseXlm: string;
-  increment?: number;
   txHash: string;
 }) {
-  const { contributorId, purchaseXlm, increment = 0.001, txHash } = params;
+  const { contributorId, purchaseXlm, txHash } = params;
   if (!txHash || !/^[a-f0-9]{64}$/i.test(txHash)) {
     throw new AppError(
       'INVALID_INPUT',
@@ -163,16 +166,13 @@ export async function recordNativeXlmRoundUp(params: {
       400,
     );
   }
+  const purchaseAmt = Number.parseFloat(purchaseXlm);
+  if (!(purchaseAmt >= 0.001)) {
+    throw new AppError('INVALID_INPUT', 'Purchase must be at least 0.001 XLM', 400);
+  }
   const contributor = await getContributor(contributorId);
   const vault = await getVault();
-  const contributionXlm = roundUpDelta(purchaseXlm, increment, 7);
-  if (Number.parseFloat(contributionXlm) <= 0) {
-    throw new AppError(
-      'INVALID_INPUT',
-      'Purchase is already a whole XLM amount — no spare change',
-      400,
-    );
-  }
+  const contributionXlm = FLAT_CONTRIBUTION_XLM;
 
   const muxedAddress = createMuxedAddress(vault.vaultAddress, BigInt(contributor.muxIndex));
 

@@ -263,9 +263,8 @@ export function RecehClient(props: {
 
   const contributionXlm = useMemo(() => {
     const amt = Number.parseFloat(purchaseXlm);
-    if (!Number.isFinite(amt) || amt < 0) return 0;
-    const delta = Math.ceil(amt / 0.001) * 0.001 - amt;
-    return Math.round(delta * 1e7) / 1e7;
+    if (!Number.isFinite(amt) || amt < 0.001) return 0;
+    return 0.001;
   }, [purchaseXlm]);
 
   async function handleRoundUpXlmPurchase() {
@@ -278,7 +277,7 @@ export function RecehClient(props: {
       return;
     }
     if (contributionXlm <= 0) {
-      toast.error('Enter a purchase amount that has spare change to round up');
+      toast.error('Enter a purchase amount of at least 0.001 XLM');
       return;
     }
     setBusyXlmPurchase(true);
@@ -558,8 +557,8 @@ export function RecehClient(props: {
               <h2 className="text-2xl text-slate-900">Embeddable checkout widget</h2>
             </div>
             <p className="text-slate-600 mb-6">
-              A shopper pays for a purchase; Receh rounds it up to the nearest 0.001 XLM and routes
-              the spare change into the shared vault.
+              A shopper pays for a purchase; Receh adds a flat 0.001 XLM contribution on top and
+              routes it into the shared vault.
             </p>
 
             <div className="grid sm:grid-cols-2 gap-5">
@@ -604,6 +603,8 @@ export function RecehClient(props: {
                   id="purchase"
                   data-testid="input-purchase-xlm"
                   inputMode="decimal"
+                  min="0.001"
+                  step="0.001"
                   value={purchaseXlm}
                   onChange={(e) => setPurchaseXlm(normalizeDecimalInput(e.target.value))}
                   className="w-full h-12 rounded-xl border border-slate-300 px-3 text-base text-slate-800 bg-white tabular-nums"
