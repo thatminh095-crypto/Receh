@@ -364,7 +364,7 @@ export function RecehClient(props: {
     }
     setBusyXlmPurchase(true);
     try {
-      const buildRes = await fetch('/api/roundups/build-xlm-purchase', {
+      const buildRes = await fetch('/api/roundups/build-xlm-native', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -399,7 +399,7 @@ export function RecehClient(props: {
       const submitJson = await submitRes.json();
       if (!submitJson.ok) throw new Error(submitJson.error?.message ?? 'XLM payment failed to submit');
 
-      const recordRes = await fetch('/api/roundups/record-xlm-purchase', {
+      const recordRes = await fetch('/api/roundups/record-xlm-native', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

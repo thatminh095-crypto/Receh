@@ -8,9 +8,11 @@ import { buildSep7PayUri, createMuxedAddress } from '@/server/lib/muxed';
 import { buildRecordRoundupXdr } from '@/server/lib/recehPoolContract';
 import { roundedTotal, roundUpDelta } from '@/server/lib/roundup';
 import {
+  buildNativeXlmPayment,
   buildXlmStrictSendPayment,
   buildXlmToUsdcPayment,
   quoteXlmSendPath,
+  verifyNativeXlmPaymentOnChain,
   verifyXlmPurchaseOnChain,
   verifyXlmRoundUpOnChain,
 } from '@/server/lib/xlmPayment';
@@ -369,6 +371,110 @@ export async function recordXlmPurchaseRoundUp(params: {
     contributorId,
     purchaseUsdc,
     contributionUsdc,
+    quote: { vault, muxedAddress, contributor },
+    txHash,
+  });
+}
+
+/**
+ * Build an unsigned plain Payment sending the XLM spare change straight to the vault —
+ * no USDC conversion, no destination trustline required. For a vault that holds XLM
+ * natively instead of routing everything into a USDC yield pool.
+ */
+export async function buildNativeXlmRoundUp(
+  contributorPublicKey: string,
+  contributorId: string,
+  purchaseXlm: string,
+  increment = 1,
+) {
+  const contributor = await getContributor(contributorId);
+  const vault = await getVault();
+  const contributionXlm = roundUpDelta(purchaseXlm, increment, 7);
+  if (Number.parseFloat(contributionXlm) <= 0) {
+    throw new AppError(
+      'INVALID_INPUT',
+      'Purchase is already a whole XLM amount — no spare change',
+      400,
+    );
+  }
+
+  let muxedAddress = vault.vaultAddress;
+  try {
+    muxedAddress = createMuxedAddress(vault.vaultAddress, BigInt(contributor.muxIndex));
+  } catch {
+    muxedAddress = vault.vaultAddress;
+  }
+
+  const payment = await buildNativeXlmPayment({
+    sourcePublicKey: contributorPublicKey,
+    destination: muxedAddress,
+    amount: contributionXlm,
+  });
+
+  return {
+    ...payment,
+    contributionXlm,
+    roundedTotalXlm: roundedTotal(purchaseXlm, increment, 7),
+    purchaseXlm,
+    muxedAddress,
+    contributor,
+    vault,
+  };
+}
+
+/**
+ * Record a native-XLM round-up. Always credits the REAL amount confirmed on Horizon —
+ * never a client-reported figure.
+ */
+export async function recordNativeXlmRoundUp(params: {
+  contributorId: string;
+  purchaseXlm: string;
+  increment?: number;
+  txHash: string;
+}) {
+  const { contributorId, purchaseXlm, increment = 1, txHash } = params;
+  if (!txHash || !/^[a-f0-9]{64}$/i.test(txHash)) {
+    throw new AppError(
+      'INVALID_INPUT',
+      'A real Horizon txHash (64-char hex) is required to record a round-up',
+      400,
+    );
+  }
+  const contributor = await getContributor(contributorId);
+  const vault = await getVault();
+  const contributionXlm = roundUpDelta(purchaseXlm, increment, 7);
+  if (Number.parseFloat(contributionXlm) <= 0) {
+    throw new AppError(
+      'INVALID_INPUT',
+      'Purchase is already a whole XLM amount — no spare change',
+      400,
+    );
+  }
+
+  let muxedAddress = vault.vaultAddress;
+  try {
+    muxedAddress = createMuxedAddress(vault.vaultAddress, BigInt(contributor.muxIndex));
+  } catch {
+    muxedAddress = vault.vaultAddress;
+  }
+
+  const verification = await verifyNativeXlmPaymentOnChain({
+    txHash,
+    destination: muxedAddress,
+    minAmount: contributionXlm,
+  });
+  if (!verification.verified || !verification.actualAmount) {
+    throw new AppError(
+      'UNAUTHORIZED',
+      verification.reason ?? 'Could not verify the XLM payment on-chain',
+      401,
+    );
+  }
+
+  return settleRoundUp({
+    contributorId,
+    purchaseUsdc: purchaseXlm,
+    contributionUsdc: verification.actualAmount,
     quote: { vault, muxedAddress, contributor },
     txHash,
   });
