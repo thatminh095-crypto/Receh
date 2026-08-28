@@ -137,10 +137,10 @@ describe('roundup.service', () => {
     const out = await buildNativeXlmRoundUp(
       'GAEIMHCAB46FUYMWWVXAHSMOBK7VF7PKGX2OIBOG44K5FGL4T7NJPRC3',
       'c1',
-      '4.30',
+      '4.3001234',
     );
-    expect(out.contributionXlm).toBe('0.7000000');
-    expect(out.roundedTotalXlm).toBe('5.0000000');
+    expect(out.contributionXlm).toBe('0.0008766');
+    expect(out.roundedTotalXlm).toBe('4.3010000');
     expect(out.muxedAddress.startsWith('M')).toBe(true);
     expect(out.xdr).toBe('AAAA-native-payment');
   });
@@ -163,7 +163,7 @@ describe('roundup.service', () => {
     ];
     const out = await recordNativeXlmRoundUp({
       contributorId: 'c1',
-      purchaseXlm: '4.30',
+      purchaseXlm: '4.3001234',
       txHash: 'a'.repeat(64),
     });
     expect(verifyNativeXlmPaymentOnChain).toHaveBeenCalledTimes(1);
@@ -182,7 +182,11 @@ describe('roundup.service', () => {
     q.results = [[contributor()]];
     verifyNativeXlmPaymentOnChain.mockResolvedValueOnce({ verified: false, reason: 'nope' });
     await expect(
-      recordNativeXlmRoundUp({ contributorId: 'c1', purchaseXlm: '4.30', txHash: 'a'.repeat(64) }),
+      recordNativeXlmRoundUp({
+        contributorId: 'c1',
+        purchaseXlm: '4.3001234',
+        txHash: 'a'.repeat(64),
+      }),
     ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
   });
 
@@ -192,7 +196,11 @@ describe('roundup.service', () => {
       'duplicate key value violates unique constraint "round_ups_tx_hash_unique"',
     );
     await expect(
-      recordNativeXlmRoundUp({ contributorId: 'c1', purchaseXlm: '4.30', txHash: 'a'.repeat(64) }),
+      recordNativeXlmRoundUp({
+        contributorId: 'c1',
+        purchaseXlm: '4.3001234',
+        txHash: 'a'.repeat(64),
+      }),
     ).rejects.toMatchObject({ code: 'CONFLICT' });
   });
 
@@ -200,7 +208,7 @@ describe('roundup.service', () => {
     q.results = [[contributor({ stellarAddress: '' })], [{ id: 'r1', contributionUsdc: '0.70' }]];
     const out = await recordNativeXlmRoundUp({
       contributorId: 'c1',
-      purchaseXlm: '4.30',
+      purchaseXlm: '4.3001234',
       txHash: 'a'.repeat(64),
     });
     expect(buildRecordRoundupXdr).not.toHaveBeenCalled();
@@ -210,13 +218,13 @@ describe('roundup.service', () => {
 
   it('recordNativeXlmRoundUp rejects missing txHash', async () => {
     await expect(
-      recordNativeXlmRoundUp({ contributorId: 'c1', purchaseXlm: '4.30', txHash: '' }),
+      recordNativeXlmRoundUp({ contributorId: 'c1', purchaseXlm: '4.3001234', txHash: '' }),
     ).rejects.toMatchObject({ code: 'INVALID_INPUT' });
   });
 
   it('recordNativeXlmRoundUp rejects malformed txHash', async () => {
     await expect(
-      recordNativeXlmRoundUp({ contributorId: 'c1', purchaseXlm: '4.30', txHash: 'not-hex' }),
+      recordNativeXlmRoundUp({ contributorId: 'c1', purchaseXlm: '4.3001234', txHash: 'not-hex' }),
     ).rejects.toMatchObject({ code: 'INVALID_INPUT' });
   });
 

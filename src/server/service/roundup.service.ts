@@ -108,7 +108,7 @@ export async function buildNativeXlmRoundUp(
   contributorPublicKey: string,
   contributorId: string,
   purchaseXlm: string,
-  increment = 1,
+  increment = 0.001,
 ) {
   const contributor = await getContributor(contributorId);
   const vault = await getVault();
@@ -155,7 +155,7 @@ export async function recordNativeXlmRoundUp(params: {
   increment?: number;
   txHash: string;
 }) {
-  const { contributorId, purchaseXlm, increment = 1, txHash } = params;
+  const { contributorId, purchaseXlm, increment = 0.001, txHash } = params;
   if (!txHash || !/^[a-f0-9]{64}$/i.test(txHash)) {
     throw new AppError(
       'INVALID_INPUT',

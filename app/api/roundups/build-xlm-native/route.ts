@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
       body.contributorPublicKey,
       body.contributorId,
       body.purchaseXlm,
-      body.increment ?? 1,
+      body.increment ?? 0.001,
     );
     return ok({ ...payment, networkPassphrase: stellar.passphrase });
   } catch (err) {

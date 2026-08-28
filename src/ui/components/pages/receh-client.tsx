@@ -264,7 +264,7 @@ export function RecehClient(props: {
   const contributionXlm = useMemo(() => {
     const amt = Number.parseFloat(purchaseXlm);
     if (!Number.isFinite(amt) || amt < 0) return 0;
-    const delta = Math.ceil(amt) - amt;
+    const delta = Math.ceil(amt / 0.001) * 0.001 - amt;
     return Math.round(delta * 1e7) / 1e7;
   }, [purchaseXlm]);
 
@@ -278,7 +278,7 @@ export function RecehClient(props: {
       return;
     }
     if (contributionXlm <= 0) {
-      toast.error('Enter a purchase with spare change (not a whole XLM amount)');
+      toast.error('Enter a purchase amount that has spare change to round up');
       return;
     }
     setBusyXlmPurchase(true);
@@ -558,8 +558,8 @@ export function RecehClient(props: {
               <h2 className="text-2xl text-slate-900">Embeddable checkout widget</h2>
             </div>
             <p className="text-slate-600 mb-6">
-              A shopper pays for a purchase; Receh rounds it up to the next whole XLM and routes the
-              spare change into the shared vault via a SEP-7 payment.
+              A shopper pays for a purchase; Receh rounds it up to the nearest 0.001 XLM and routes
+              the spare change into the shared vault.
             </p>
 
             <div className="grid sm:grid-cols-2 gap-5">
