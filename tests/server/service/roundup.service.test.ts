@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const q: { results: unknown[][]; updates: unknown[] } = { results: [], updates: [] };
+const q: { results: unknown[][]; updates: unknown[]; insertError: Error | null } = {
+  results: [],
+  updates: [],
+  insertError: null,
+};
 function nextResult(): unknown[] {
   return q.results.shift() ?? [];
 }
@@ -13,7 +17,14 @@ vi.mock('@/server/db/client', () => {
     limit: () => Promise.resolve(nextResult()),
     then: (resolve: (v: unknown) => void) => resolve(nextResult()),
   };
-  const insertChain = { values: () => ({ returning: () => Promise.resolve(nextResult()) }) };
+  const insertChain = {
+    values: () => ({
+      returning: () => {
+        if (q.insertError) return Promise.reject(q.insertError);
+        return Promise.resolve(nextResult());
+      },
+    }),
+  };
   const updateChain = {
     set: (v: unknown) => {
       q.updates.push(v);
@@ -37,13 +48,6 @@ vi.mock('@/server/db/client', () => {
   };
 });
 
-vi.mock('@/server/config/stellar', () => ({
-  stellar: {
-    usdcAssetCode: 'USDC',
-    usdcIssuer: 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5',
-  },
-}));
-
 const G = 'GCEZWKCA5VLDNRLN3RPRJMRZOX3Z6G5CHCGSNFHEYVXM3XOJMDS674JZ';
 
 // Mock vault.service so round-up flow is isolated from DB-heavy vault logic.
@@ -63,21 +67,32 @@ vi.mock('@/server/lib/recehPoolContract', () => ({
   buildRecordRoundupXdr: (...a: unknown[]) => buildRecordRoundupXdr(...(a as [])),
 }));
 
+const buildNativeXlmPayment = vi.fn(async () => ({ xdr: 'AAAA-native-payment' }));
+const verifyNativeXlmPaymentOnChain = vi.fn(async () => ({ verified: true, actualAmount: '0.70' }));
+vi.mock('@/server/lib/xlmPayment', () => ({
+  buildNativeXlmPayment: (...a: unknown[]) => buildNativeXlmPayment(...(a as [])),
+  verifyNativeXlmPaymentOnChain: (...a: unknown[]) => verifyNativeXlmPaymentOnChain(...(a as [])),
+}));
+
 import {
+  buildNativeXlmRoundUp,
   createContributor,
   getContributor,
   listContributors,
   listRoundUps,
-  quoteRoundUp,
-  recordRoundUp,
+  recordNativeXlmRoundUp,
 } from '@/server/service/roundup.service';
 
 beforeEach(() => {
   q.results = [];
   q.updates = [];
+  q.insertError = null;
   depositToVault.mockClear();
   getVault.mockClear();
   buildRecordRoundupXdr.mockClear();
+  buildNativeXlmPayment.mockClear();
+  verifyNativeXlmPaymentOnChain.mockReset();
+  verifyNativeXlmPaymentOnChain.mockResolvedValue({ verified: true, actualAmount: '0.70' });
 });
 
 const contributor = (over: Record<string, unknown> = {}) => ({
@@ -117,41 +132,75 @@ describe('roundup.service', () => {
     expect(out.muxIndex).toBe(4);
   });
 
-  it('quoteRoundUp builds a SEP-7 uri and muxed address', async () => {
+  it('buildNativeXlmRoundUp builds a payment and muxed address', async () => {
     q.results = [[contributor()]]; // getContributor
-    const out = await quoteRoundUp('c1', '4.30');
-    expect(out.contribution).toBe('0.70');
-    expect(out.total).toBe('5.00');
-    expect(out.sep7Uri).toContain('web+stellar:pay');
+    const out = await buildNativeXlmRoundUp(
+      'GAEIMHCAB46FUYMWWVXAHSMOBK7VF7PKGX2OIBOG44K5FGL4T7NJPRC3',
+      'c1',
+      '4.30',
+    );
+    expect(out.contributionXlm).toBe('0.7000000');
+    expect(out.roundedTotalXlm).toBe('5.0000000');
     expect(out.muxedAddress.startsWith('M')).toBe(true);
+    expect(out.xdr).toBe('AAAA-native-payment');
   });
 
-  it('recordRoundUp persists, attributes, and deposits to the vault', async () => {
+  it('buildNativeXlmRoundUp rejects a whole-number purchase (no spare change)', async () => {
+    q.results = [[contributor()]];
+    await expect(
+      buildNativeXlmRoundUp(
+        'GAEIMHCAB46FUYMWWVXAHSMOBK7VF7PKGX2OIBOG44K5FGL4T7NJPRC3',
+        'c1',
+        '5.00',
+      ),
+    ).rejects.toMatchObject({ code: 'INVALID_INPUT' });
+  });
+
+  it('recordNativeXlmRoundUp verifies on-chain, persists, attributes, and deposits', async () => {
     q.results = [
-      [contributor()], // getContributor (inside quote)
+      [contributor()], // getContributor
       [{ id: 'r1', contributionUsdc: '0.70' }], // insert round-up returning
     ];
-    const out = await recordRoundUp({
+    const out = await recordNativeXlmRoundUp({
       contributorId: 'c1',
-      purchaseUsdc: '4.30',
+      purchaseXlm: '4.30',
       txHash: 'a'.repeat(64),
     });
+    expect(verifyNativeXlmPaymentOnChain).toHaveBeenCalledTimes(1);
     expect(out.contribution).toBe('0.70');
     expect(depositToVault).toHaveBeenCalledWith('v1', '0.70');
-    expect(q.updates[0]).toMatchObject({ totalContributedUsdc: '3.70', roundUpCount: 5 });
+    // Atomic SQL update — not a read-then-write literal, so we assert the shape of the
+    // set() payload rather than a computed literal.
+    expect(q.updates[0]).toHaveProperty('totalContributedUsdc');
+    expect(q.updates[0]).toHaveProperty('roundUpCount');
     expect(buildRecordRoundupXdr).toHaveBeenCalledTimes(1);
     expect(out.contractAttempt.invoked).toBe(true);
     expect(out.contractAttempt.xdr).toBe('AAAA-prepared-xdr');
   });
 
-  it('recordRoundUp skips on-chain call when contributor lacks stellarAddress', async () => {
-    q.results = [
-      [contributor({ stellarAddress: '' })],
-      [{ id: 'r1', contributionUsdc: '0.70' }],
-    ];
-    const out = await recordRoundUp({
+  it('recordNativeXlmRoundUp rejects when on-chain verification fails', async () => {
+    q.results = [[contributor()]];
+    verifyNativeXlmPaymentOnChain.mockResolvedValueOnce({ verified: false, reason: 'nope' });
+    await expect(
+      recordNativeXlmRoundUp({ contributorId: 'c1', purchaseXlm: '4.30', txHash: 'a'.repeat(64) }),
+    ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+  });
+
+  it('recordNativeXlmRoundUp rejects a replayed txHash as CONFLICT', async () => {
+    q.results = [[contributor()]];
+    q.insertError = new Error(
+      'duplicate key value violates unique constraint "round_ups_tx_hash_unique"',
+    );
+    await expect(
+      recordNativeXlmRoundUp({ contributorId: 'c1', purchaseXlm: '4.30', txHash: 'a'.repeat(64) }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+  });
+
+  it('recordNativeXlmRoundUp skips on-chain contract call when contributor lacks stellarAddress', async () => {
+    q.results = [[contributor({ stellarAddress: '' })], [{ id: 'r1', contributionUsdc: '0.70' }]];
+    const out = await recordNativeXlmRoundUp({
       contributorId: 'c1',
-      purchaseUsdc: '4.30',
+      purchaseXlm: '4.30',
       txHash: 'a'.repeat(64),
     });
     expect(buildRecordRoundupXdr).not.toHaveBeenCalled();
@@ -159,26 +208,22 @@ describe('roundup.service', () => {
     expect(out.contractAttempt.reason).toContain('stellarAddress');
   });
 
-  it('recordRoundUp rejects missing txHash', async () => {
+  it('recordNativeXlmRoundUp rejects missing txHash', async () => {
     await expect(
-      recordRoundUp({ contributorId: 'c1', purchaseUsdc: '4.30', txHash: '' }),
+      recordNativeXlmRoundUp({ contributorId: 'c1', purchaseXlm: '4.30', txHash: '' }),
     ).rejects.toMatchObject({ code: 'INVALID_INPUT' });
   });
 
-  it('recordRoundUp rejects malformed txHash', async () => {
+  it('recordNativeXlmRoundUp rejects malformed txHash', async () => {
     await expect(
-      recordRoundUp({ contributorId: 'c1', purchaseUsdc: '4.30', txHash: 'not-hex' }),
+      recordNativeXlmRoundUp({ contributorId: 'c1', purchaseXlm: '4.30', txHash: 'not-hex' }),
     ).rejects.toMatchObject({ code: 'INVALID_INPUT' });
   });
 
-  it('recordRoundUp rejects a whole-number purchase (no spare change)', async () => {
+  it('recordNativeXlmRoundUp rejects a whole-number purchase (no spare change)', async () => {
     q.results = [[contributor()]];
     await expect(
-      recordRoundUp({
-        contributorId: 'c1',
-        purchaseUsdc: '5.00',
-        txHash: 'a'.repeat(64),
-      }),
+      recordNativeXlmRoundUp({ contributorId: 'c1', purchaseXlm: '5.00', txHash: 'a'.repeat(64) }),
     ).rejects.toMatchObject({ code: 'INVALID_INPUT' });
   });
 

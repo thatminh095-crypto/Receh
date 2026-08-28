@@ -1,21 +1,11 @@
-import { Asset } from '@stellar/stellar-sdk';
 import { desc, eq, sql } from 'drizzle-orm';
-import { stellar } from '@/server/config/stellar';
 import { db } from '@/server/db/client';
 import { contributors, type NewContributor, roundUps } from '@/server/db/schema';
 import { AppError } from '@/server/lib/http';
-import { buildSep7PayUri, createMuxedAddress } from '@/server/lib/muxed';
+import { createMuxedAddress } from '@/server/lib/muxed';
 import { buildRecordRoundupXdr } from '@/server/lib/recehPoolContract';
 import { roundedTotal, roundUpDelta } from '@/server/lib/roundup';
-import {
-  buildNativeXlmPayment,
-  buildXlmStrictSendPayment,
-  buildXlmToUsdcPayment,
-  quoteXlmSendPath,
-  verifyNativeXlmPaymentOnChain,
-  verifyXlmPurchaseOnChain,
-  verifyXlmRoundUpOnChain,
-} from '@/server/lib/xlmPayment';
+import { buildNativeXlmPayment, verifyNativeXlmPaymentOnChain } from '@/server/lib/xlmPayment';
 import { depositToVault, getVault } from './vault.service';
 
 export async function listContributors() {
@@ -43,47 +33,21 @@ export async function createContributor(data: Omit<NewContributor, 'muxIndex'>) 
   return inserted[0]!;
 }
 
-/** Compute the SEP-7 round-up routing URI for a contributor + purchase (preview, no write). */
-export async function quoteRoundUp(contributorId: string, purchaseUsdc: string, increment = 1) {
-  const contributor = await getContributor(contributorId);
-  const vault = await getVault();
-
-  const contribution = roundUpDelta(purchaseUsdc, increment);
-  const total = roundedTotal(purchaseUsdc, increment);
-
-  // Per-contributor SEP-23 muxed attribution on the shared vault account.
-  let muxedAddress = vault.vaultAddress;
-  try {
-    muxedAddress = createMuxedAddress(vault.vaultAddress, BigInt(contributor.muxIndex));
-  } catch {
-    muxedAddress = vault.vaultAddress;
-  }
-
-  const sep7Uri = buildSep7PayUri({
-    destination: muxedAddress,
-    amount: contribution,
-    assetCode: stellar.usdcAssetCode,
-    assetIssuer: stellar.usdcIssuer,
-    memo: `RECEH:${contributor.id.slice(0, 8)}`,
-    memoType: 'text',
-    msg: 'Receh round-up into community vault',
-  });
-
-  return { contributor, vault, contribution, total, purchaseUsdc, muxedAddress, sep7Uri };
-}
-
-/**
- * Persist a verified round-up: insert the row, bump contributor totals, deposit the
- * spare change into the shared vault, and attempt the on-chain contract record.
- * Shared by both payment paths once each has independently confirmed the funds
- * actually landed — this function itself does not re-verify anything.
- */
 type SettleQuote = {
   vault: Awaited<ReturnType<typeof getVault>>;
   muxedAddress: string;
   contributor: Awaited<ReturnType<typeof getContributor>>;
 };
 
+/**
+ * Persist a verified round-up: insert the row (txHash unique per vault — a replayed
+ * hash is rejected, never double-credited), bump contributor totals atomically in SQL
+ * (not read-then-write in JS, so two concurrent round-ups from the same contributor
+ * can't race and lose an update), deposit into the shared vault, and attempt the
+ * on-chain contract record. Shared by every settlement path once it has independently
+ * confirmed the funds actually landed — this function itself does not re-verify
+ * anything.
+ */
 async function settleRoundUp(params: {
   contributorId: string;
   purchaseUsdc: string;
@@ -93,31 +57,37 @@ async function settleRoundUp(params: {
 }) {
   const { contributorId, purchaseUsdc, contributionUsdc, quote, txHash } = params;
 
-  const rows = await db
-    .insert(roundUps)
-    .values({
-      contributorId,
-      vaultId: quote.vault.id,
-      purchaseUsdc,
-      contributionUsdc,
-      muxedAddress: quote.muxedAddress,
-      txHash,
-    })
-    .returning();
+  let rows: (typeof roundUps.$inferSelect)[];
+  try {
+    rows = await db
+      .insert(roundUps)
+      .values({
+        contributorId,
+        vaultId: quote.vault.id,
+        purchaseUsdc,
+        contributionUsdc,
+        muxedAddress: quote.muxedAddress,
+        txHash,
+      })
+      .returning();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (message.includes('round_ups_tx_hash_unique')) {
+      throw new AppError('CONFLICT', 'This transaction was already recorded', 409);
+    }
+    throw err;
+  }
   const roundUp = rows[0]!;
 
-  const newTotal = (
-    Number.parseFloat(quote.contributor.totalContributedUsdc) + Number.parseFloat(contributionUsdc)
-  ).toFixed(2);
   await db
     .update(contributors)
     .set({
-      totalContributedUsdc: newTotal,
-      roundUpCount: quote.contributor.roundUpCount + 1,
+      totalContributedUsdc: sql`(${contributors.totalContributedUsdc}::numeric + ${contributionUsdc}::numeric)::text`,
+      roundUpCount: sql`${contributors.roundUpCount} + 1`,
     })
     .where(eq(contributors.id, contributorId));
 
-  // Deposit spare change into the shared DeFindex vault (grows principal + yield).
+  // Deposit spare change into the shared vault.
   const vault = await depositToVault(quote.vault.id, contributionUsdc);
 
   const contractAttempt = await recordRoundUpOnChain({
@@ -131,255 +101,8 @@ async function settleRoundUp(params: {
 }
 
 /**
- * Record a round-up paid directly in USDC: persist the contribution, attribute it to
- * the contributor (muxed), deposit the spare change into the shared vault, and bump
- * the contributor totals.
- *
- * Requires a real on-chain txHash from the SEP-7 payment; reject if missing.
- */
-export async function recordRoundUp(params: {
-  contributorId: string;
-  purchaseUsdc: string;
-  increment?: number;
-  txHash: string;
-}) {
-  const { contributorId, purchaseUsdc, increment = 1, txHash } = params;
-  if (!txHash || !/^[a-f0-9]{64}$/i.test(txHash)) {
-    throw new AppError(
-      'INVALID_INPUT',
-      'A real Horizon txHash (64-char hex) is required to record a round-up',
-      400,
-    );
-  }
-  const quote = await quoteRoundUp(contributorId, purchaseUsdc, increment);
-
-  if (Number.parseFloat(quote.contribution) <= 0) {
-    throw new AppError(
-      'INVALID_INPUT',
-      'Purchase is already a whole amount — no spare change',
-      400,
-    );
-  }
-
-  return settleRoundUp({
-    contributorId,
-    purchaseUsdc,
-    contributionUsdc: quote.contribution,
-    quote,
-    txHash,
-  });
-}
-
-/**
- * Build an unsigned PathPaymentStrictReceive: the contributor pays in XLM, the vault
- * is guaranteed to receive exactly the USDC round-up amount if the transaction
- * succeeds at all (no slippage on the vault's side — only the payer's XLM cost varies,
- * capped by the slippage tolerance).
- */
-export async function buildXlmRoundUpPayment(
-  contributorPublicKey: string,
-  contributorId: string,
-  purchaseUsdc: string,
-  increment = 1,
-) {
-  const quote = await quoteRoundUp(contributorId, purchaseUsdc, increment);
-  if (Number.parseFloat(quote.contribution) <= 0) {
-    throw new AppError(
-      'INVALID_INPUT',
-      'Purchase is already a whole amount — no spare change',
-      400,
-    );
-  }
-  const usdcAsset = new Asset(stellar.usdcAssetCode, stellar.usdcIssuer);
-  const payment = await buildXlmToUsdcPayment({
-    sourcePublicKey: contributorPublicKey,
-    destination: quote.muxedAddress,
-    destAsset: usdcAsset,
-    destAmount: quote.contribution,
-  });
-  return { ...payment, quote };
-}
-
-/**
- * Record a round-up paid in XLM. Unlike the direct-USDC path, this never trusts the
- * client's claimed amount — it independently confirms on Horizon that the vault
- * actually received at least the round-up's USDC contribution before crediting
- * anything.
- */
-export async function recordXlmRoundUp(params: {
-  contributorId: string;
-  purchaseUsdc: string;
-  increment?: number;
-  txHash: string;
-}) {
-  const { contributorId, purchaseUsdc, increment = 1, txHash } = params;
-  if (!txHash || !/^[a-f0-9]{64}$/i.test(txHash)) {
-    throw new AppError(
-      'INVALID_INPUT',
-      'A real Horizon txHash (64-char hex) is required to record a round-up',
-      400,
-    );
-  }
-  const quote = await quoteRoundUp(contributorId, purchaseUsdc, increment);
-  if (Number.parseFloat(quote.contribution) <= 0) {
-    throw new AppError(
-      'INVALID_INPUT',
-      'Purchase is already a whole amount — no spare change',
-      400,
-    );
-  }
-
-  const verification = await verifyXlmRoundUpOnChain({
-    txHash,
-    destination: quote.muxedAddress,
-    destAssetCode: stellar.usdcAssetCode,
-    destAssetIssuer: stellar.usdcIssuer,
-    minDestAmount: quote.contribution,
-  });
-  if (!verification.verified) {
-    throw new AppError(
-      'UNAUTHORIZED',
-      verification.reason ?? 'Could not verify the XLM payment on-chain',
-      401,
-    );
-  }
-
-  return settleRoundUp({
-    contributorId,
-    purchaseUsdc,
-    contributionUsdc: verification.actualDestAmount ?? quote.contribution,
-    quote,
-    txHash,
-  });
-}
-
-/**
- * Quote + build an unsigned PathPaymentStrictSend for a purchase entered directly in
- * XLM: the spare change (round-up delta, in XLM) is what actually gets sent — the
- * USDC the vault receives depends on the live price and is read back off the chain
- * afterwards, never assumed here.
- */
-export async function buildXlmPurchaseRoundUp(
-  contributorPublicKey: string,
-  contributorId: string,
-  purchaseXlm: string,
-  increment = 1,
-) {
-  const contributor = await getContributor(contributorId);
-  const vault = await getVault();
-  const contributionXlm = roundUpDelta(purchaseXlm, increment, 7);
-  if (Number.parseFloat(contributionXlm) <= 0) {
-    throw new AppError(
-      'INVALID_INPUT',
-      'Purchase is already a whole XLM amount — no spare change',
-      400,
-    );
-  }
-
-  let muxedAddress = vault.vaultAddress;
-  try {
-    muxedAddress = createMuxedAddress(vault.vaultAddress, BigInt(contributor.muxIndex));
-  } catch {
-    muxedAddress = vault.vaultAddress;
-  }
-
-  const usdcAsset = new Asset(stellar.usdcAssetCode, stellar.usdcIssuer);
-  const payment = await buildXlmStrictSendPayment({
-    sourcePublicKey: contributorPublicKey,
-    destination: muxedAddress,
-    destAsset: usdcAsset,
-    sendAmount: contributionXlm,
-  });
-
-  return {
-    ...payment,
-    contributionXlm,
-    roundedTotalXlm: roundedTotal(purchaseXlm, increment, 7),
-    purchaseXlm,
-    muxedAddress,
-    contributor,
-    vault,
-  };
-}
-
-/**
- * Record a round-up whose purchase was entered in XLM. The USDC credited to the vault
- * is always the REAL amount confirmed on-chain (path_payment_strict_send has no fixed
- * destination amount) — never a client-reported figure.
- */
-export async function recordXlmPurchaseRoundUp(params: {
-  contributorId: string;
-  purchaseXlm: string;
-  increment?: number;
-  txHash: string;
-}) {
-  const { contributorId, purchaseXlm, increment = 1, txHash } = params;
-  if (!txHash || !/^[a-f0-9]{64}$/i.test(txHash)) {
-    throw new AppError(
-      'INVALID_INPUT',
-      'A real Horizon txHash (64-char hex) is required to record a round-up',
-      400,
-    );
-  }
-  const contributor = await getContributor(contributorId);
-  const vault = await getVault();
-  const contributionXlm = roundUpDelta(purchaseXlm, increment, 7);
-  if (Number.parseFloat(contributionXlm) <= 0) {
-    throw new AppError(
-      'INVALID_INPUT',
-      'Purchase is already a whole XLM amount — no spare change',
-      400,
-    );
-  }
-
-  let muxedAddress = vault.vaultAddress;
-  try {
-    muxedAddress = createMuxedAddress(vault.vaultAddress, BigInt(contributor.muxIndex));
-  } catch {
-    muxedAddress = vault.vaultAddress;
-  }
-
-  const usdcAsset = new Asset(stellar.usdcAssetCode, stellar.usdcIssuer);
-  // A fresh floor quote just to sanity-bound what counts as an acceptable minimum —
-  // the actual credited amount always comes from the verified on-chain result below,
-  // this only guards against crediting a wildly-too-small or stale/zero transaction.
-  const freshQuote = await quoteXlmSendPath(usdcAsset, contributionXlm);
-  const minAcceptable = (Number.parseFloat(freshQuote.destAmount) * 0.9).toFixed(7);
-
-  const verification = await verifyXlmPurchaseOnChain({
-    txHash,
-    destination: muxedAddress,
-    destAssetCode: stellar.usdcAssetCode,
-    destAssetIssuer: stellar.usdcIssuer,
-    minDestAmount: minAcceptable,
-  });
-  if (!verification.verified || !verification.actualDestAmount) {
-    throw new AppError(
-      'UNAUTHORIZED',
-      verification.reason ?? 'Could not verify the XLM payment on-chain',
-      401,
-    );
-  }
-  const contributionUsdc = verification.actualDestAmount;
-
-  // Best-effort USDC-equivalent of the whole purchase for record-keeping/display only;
-  // unlike contributionUsdc, this is never used to credit anything.
-  const purchaseQuote = await quoteXlmSendPath(usdcAsset, purchaseXlm).catch(() => null);
-  const purchaseUsdc = purchaseQuote?.destAmount ?? contributionUsdc;
-
-  return settleRoundUp({
-    contributorId,
-    purchaseUsdc,
-    contributionUsdc,
-    quote: { vault, muxedAddress, contributor },
-    txHash,
-  });
-}
-
-/**
  * Build an unsigned plain Payment sending the XLM spare change straight to the vault —
- * no USDC conversion, no destination trustline required. For a vault that holds XLM
- * natively instead of routing everything into a USDC yield pool.
+ * no USDC conversion, no destination trustline required. The vault holds XLM directly.
  */
 export async function buildNativeXlmRoundUp(
   contributorPublicKey: string,
@@ -398,12 +121,11 @@ export async function buildNativeXlmRoundUp(
     );
   }
 
-  let muxedAddress = vault.vaultAddress;
-  try {
-    muxedAddress = createMuxedAddress(vault.vaultAddress, BigInt(contributor.muxIndex));
-  } catch {
-    muxedAddress = vault.vaultAddress;
-  }
+  // Fail closed: never send a round-up to the shared base address just because a
+  // contributor's muxed encoding failed — that would let one contributor's payment
+  // be recorded under a different contributor's identity (every muxed payment
+  // resolves back to the same base G-address on Horizon).
+  const muxedAddress = createMuxedAddress(vault.vaultAddress, BigInt(contributor.muxIndex));
 
   const payment = await buildNativeXlmPayment({
     sourcePublicKey: contributorPublicKey,
@@ -424,7 +146,8 @@ export async function buildNativeXlmRoundUp(
 
 /**
  * Record a native-XLM round-up. Always credits the REAL amount confirmed on Horizon —
- * never a client-reported figure.
+ * never a client-reported figure. A replayed txHash is rejected by the database's
+ * unique constraint in settleRoundUp, not just re-verified and re-credited.
  */
 export async function recordNativeXlmRoundUp(params: {
   contributorId: string;
@@ -451,12 +174,7 @@ export async function recordNativeXlmRoundUp(params: {
     );
   }
 
-  let muxedAddress = vault.vaultAddress;
-  try {
-    muxedAddress = createMuxedAddress(vault.vaultAddress, BigInt(contributor.muxIndex));
-  } catch {
-    muxedAddress = vault.vaultAddress;
-  }
+  const muxedAddress = createMuxedAddress(vault.vaultAddress, BigInt(contributor.muxIndex));
 
   const verification = await verifyNativeXlmPaymentOnChain({
     txHash,

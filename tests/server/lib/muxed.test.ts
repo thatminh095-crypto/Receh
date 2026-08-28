@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  buildSep7PayUri,
-  createMuxedAddress,
-  decodeMuxedAddress,
-  muxedIdFromUuid,
-} from '@/server/lib/muxed';
+import { createMuxedAddress, decodeMuxedAddress, muxedIdFromUuid } from '@/server/lib/muxed';
 
 const G = 'GCEZWKCA5VLDNRLN3RPRJMRZOX3Z6G5CHCGSNFHEYVXM3XOJMDS674JZ';
 
@@ -23,38 +18,6 @@ describe('createMuxedAddress', () => {
 
   it('throws on an invalid public key', () => {
     expect(() => createMuxedAddress('not-a-key', 1n)).toThrow();
-  });
-});
-
-describe('buildSep7PayUri', () => {
-  it('builds a web+stellar:pay URI with all params', () => {
-    const uri = buildSep7PayUri({
-      destination: G,
-      amount: '0.70',
-      assetCode: 'USDC',
-      assetIssuer: G,
-      memo: 'RECEH:abcd1234',
-      msg: 'round-up',
-    });
-    expect(uri.startsWith('web+stellar:pay?')).toBe(true);
-    expect(uri).toContain('amount=0.70');
-    expect(uri).toContain('asset_code=USDC');
-    expect(uri).toContain('memo_type=text');
-    expect(uri).toContain('msg=round-up');
-    expect(uri).toContain('network_passphrase=');
-  });
-
-  it('honours a custom memoType and omits msg when absent', () => {
-    const uri = buildSep7PayUri({
-      destination: G,
-      amount: '1',
-      assetCode: 'USDC',
-      assetIssuer: G,
-      memo: '42',
-      memoType: 'id',
-    });
-    expect(uri).toContain('memo_type=id');
-    expect(uri).not.toContain('msg=');
   });
 });
 

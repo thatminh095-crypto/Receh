@@ -25,33 +25,6 @@ export function decodeMuxedAddress(mAddress: string): { gAddress: string; muxedI
 }
 
 /**
- * Build a SEP-7 pay URI that routes a single round-up into the shared DeFindex vault.
- */
-export function buildSep7PayUri(params: {
-  destination: string;
-  amount: string;
-  assetCode: string;
-  assetIssuer: string;
-  memo: string;
-  memoType?: string;
-  msg?: string;
-}): string {
-  const { destination, amount, assetCode, assetIssuer, memo, memoType = 'text', msg } = params;
-  const base = 'web+stellar:pay';
-  const q = new URLSearchParams({
-    destination,
-    amount,
-    asset_code: assetCode,
-    asset_issuer: assetIssuer,
-    memo,
-    memo_type: memoType,
-    network_passphrase: 'Test SDF Network ; September 2015',
-  });
-  if (msg) q.set('msg', msg);
-  return `${base}?${q.toString()}`;
-}
-
-/**
  * Derive a deterministic numeric muxed id from a uuid (first 16 hex chars).
  */
 export function muxedIdFromUuid(id: string): bigint {

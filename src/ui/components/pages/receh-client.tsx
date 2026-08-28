@@ -20,12 +20,6 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
-const IDR_PER_USDC = 16_300;
-const fmtIdr = (usdc: number | string) => {
-  const n = typeof usdc === 'number' ? usdc : Number.parseFloat(usdc);
-  return `Rp ${Math.round(n * IDR_PER_USDC).toLocaleString('id-ID')}`;
-};
-
 /**
  * Amount inputs only accept a dot decimal separator downstream (parseFloat, the
  * server's regex validation), but plenty of locales type decimals with a comma —
@@ -82,7 +76,7 @@ type RoundUpView = {
   createdAt: string;
 };
 
-const POOL_GOAL_USDC = 200;
+const POOL_GOAL_XLM = 200;
 
 export function RecehClient(props: {
   empty?: boolean;
@@ -97,17 +91,13 @@ export function RecehClient(props: {
   const [roundUps, setRoundUps] = useState(props.recentRoundUps);
   const [contributors] = useState(props.contributors);
 
-  const [purchase, setPurchase] = useState('4.30');
+  // The shared vault holds XLM directly — no USDC anywhere in this app.
   const [purchaseXlm, setPurchaseXlm] = useState('10.5');
-  const [purchaseMode, setPurchaseMode] = useState<'usdc' | 'xlm'>('usdc');
   const [activeContributor, setActiveContributor] = useState(
     props.contributors.find((c) => c.role === 'shopper')?.id ?? props.contributors[0]?.id ?? '',
   );
-  const [busy, setBusy] = useState(false);
-  const [busyXlm, setBusyXlm] = useState(false);
   const [busyXlmPurchase, setBusyXlmPurchase] = useState(false);
   const [closing, setClosing] = useState(false);
-  const [enablingTrust, setEnablingTrust] = useState(false);
   const [walletKey, setWalletKey] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [registeredContributorId, setRegisteredContributorId] = useState<string | null>(null);
@@ -133,9 +123,9 @@ export function RecehClient(props: {
     const existing = contributors.find((c) => c.id === registeredContributorId);
     if (existing) return existing.id;
     try {
-      const lookup = await fetch(`/api/contributors/by-pubkey/${encodeURIComponent(publicKey)}`).catch(
-        () => null,
-      );
+      const lookup = await fetch(
+        `/api/contributors/by-pubkey/${encodeURIComponent(publicKey)}`,
+      ).catch(() => null);
       if (lookup?.ok) {
         const j = await lookup.json();
         if (j?.ok && j?.data?.id) {
@@ -167,8 +157,9 @@ export function RecehClient(props: {
   async function connectWallet() {
     setConnecting(true);
     try {
-      const freighterApi: { requestAccess?: () => Promise<{ address?: string }> } =
-        (await import('@stellar/freighter-api').catch(() => ({}))) as never;
+      const freighterApi: { requestAccess?: () => Promise<{ address?: string }> } = (await import(
+        '@stellar/freighter-api'
+      ).catch(() => ({}))) as never;
       const requestAccess = freighterApi.requestAccess;
       if (!requestAccess) {
         toast.error('Freighter wallet not detected. Install it to continue.');
@@ -190,8 +181,12 @@ export function RecehClient(props: {
         toast.error(challengeJson.error?.message ?? 'Could not request challenge');
         return;
       }
-      const signModule: { signMessage?: (m: string, opts?: { address?: string }) => Promise<{ signedMessage?: string }> } =
-        (await import('@stellar/freighter-api').catch(() => ({}))) as never;
+      const signModule: {
+        signMessage?: (
+          m: string,
+          opts?: { address?: string },
+        ) => Promise<{ signedMessage?: string }>;
+      } = (await import('@stellar/freighter-api').catch(() => ({}))) as never;
       const signed = await signModule.signMessage?.(challengeJson.data.nonce, {
         address: publicKey,
       });
@@ -217,7 +212,9 @@ export function RecehClient(props: {
       const cid = await ensureContributorForWallet(publicKey);
       if (cid) {
         setActiveContributor(cid);
-        toast.success(`Connected — registered as contributor ${publicKey.slice(0, 4)}…${publicKey.slice(-4)}`);
+        toast.success(
+          `Connected — registered as contributor ${publicKey.slice(0, 4)}…${publicKey.slice(-4)}`,
+        );
       } else {
         toast.success(`Connected wallet ${publicKey.slice(0, 4)}…${publicKey.slice(-4)}`);
       }
@@ -264,90 +261,12 @@ export function RecehClient(props: {
     }
   };
 
-  const contribution = useMemo(() => {
-    const amt = Number.parseFloat(purchase);
-    if (!Number.isFinite(amt) || amt < 0) return 0;
-    const delta = Math.ceil(amt) - amt;
-    return Math.round(delta * 100) / 100;
-  }, [purchase]);
-
   const contributionXlm = useMemo(() => {
     const amt = Number.parseFloat(purchaseXlm);
     if (!Number.isFinite(amt) || amt < 0) return 0;
     const delta = Math.ceil(amt) - amt;
     return Math.round(delta * 1e7) / 1e7;
   }, [purchaseXlm]);
-
-  async function handleRoundUpXlm() {
-    if (!walletKey) {
-      toast.error('Connect your Freighter wallet first');
-      return;
-    }
-    if (!activeContributor) {
-      toast.error('Pick a contributor first');
-      return;
-    }
-    if (contribution <= 0) {
-      toast.error('Enter a purchase with spare change (not a whole number)');
-      return;
-    }
-    setBusyXlm(true);
-    try {
-      const buildRes = await fetch('/api/roundups/build-xlm', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contributorPublicKey: walletKey,
-          contributorId: activeContributor,
-          purchaseUsdc: purchase,
-        }),
-      });
-      const buildJson = await buildRes.json();
-      if (!buildJson.ok) throw new Error(buildJson.error?.message ?? 'Could not price the XLM route');
-
-      const signModule: {
-        signTransaction?: (
-          xdr: string,
-          opts?: { networkPassphrase?: string; address?: string },
-        ) => Promise<{ signedTxXdr?: string }>;
-      } = (await import('@stellar/freighter-api').catch(() => ({}))) as never;
-      const signed = await signModule.signTransaction?.(buildJson.data.xdr, {
-        networkPassphrase: buildJson.data.networkPassphrase,
-        address: walletKey,
-      });
-      if (!signed?.signedTxXdr) {
-        toast.error('Freighter did not return a signed transaction.');
-        return;
-      }
-
-      const submitRes = await fetch('/api/roundups/submit-xlm', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ signedTxXdr: signed.signedTxXdr }),
-      });
-      const submitJson = await submitRes.json();
-      if (!submitJson.ok) throw new Error(submitJson.error?.message ?? 'XLM payment failed to submit');
-
-      const recordRes = await fetch('/api/roundups/record-xlm', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contributorId: activeContributor,
-          purchaseUsdc: purchase,
-          txHash: submitJson.data.txHash,
-        }),
-      });
-      const recordJson = await recordRes.json();
-      if (!recordJson.ok) throw new Error(recordJson.error?.message ?? 'Round-up could not be recorded');
-
-      toast.success(`Paid with XLM — routed ${fmtIdr(recordJson.data.contribution)} into the vault.`);
-      await refresh();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'XLM round-up failed');
-    } finally {
-      setBusyXlm(false);
-    }
-  }
 
   async function handleRoundUpXlmPurchase() {
     if (!walletKey) {
@@ -374,7 +293,8 @@ export function RecehClient(props: {
         }),
       });
       const buildJson = await buildRes.json();
-      if (!buildJson.ok) throw new Error(buildJson.error?.message ?? 'Could not price the XLM purchase');
+      if (!buildJson.ok)
+        throw new Error(buildJson.error?.message ?? 'Could not price the XLM purchase');
 
       const signModule: {
         signTransaction?: (
@@ -397,7 +317,8 @@ export function RecehClient(props: {
         body: JSON.stringify({ signedTxXdr: signed.signedTxXdr }),
       });
       const submitJson = await submitRes.json();
-      if (!submitJson.ok) throw new Error(submitJson.error?.message ?? 'XLM payment failed to submit');
+      if (!submitJson.ok)
+        throw new Error(submitJson.error?.message ?? 'XLM payment failed to submit');
 
       const recordRes = await fetch('/api/roundups/record-xlm-native', {
         method: 'POST',
@@ -409,98 +330,17 @@ export function RecehClient(props: {
         }),
       });
       const recordJson = await recordRes.json();
-      if (!recordJson.ok) throw new Error(recordJson.error?.message ?? 'Round-up could not be recorded');
+      if (!recordJson.ok)
+        throw new Error(recordJson.error?.message ?? 'Round-up could not be recorded');
 
       toast.success(
-        `XLM purchase rounded up — routed ${fmtIdr(recordJson.data.contribution)} into the vault.`,
+        `XLM purchase rounded up — routed ${Number.parseFloat(recordJson.data.contribution).toFixed(7)} XLM into the vault.`,
       );
       await refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'XLM purchase round-up failed');
     } finally {
       setBusyXlmPurchase(false);
-    }
-  }
-
-  async function handleRoundUp() {
-    if (!activeContributor) {
-      toast.error('Pick a contributor first');
-      return;
-    }
-    if (contribution <= 0) {
-      toast.error('Enter a purchase with spare change (not a whole number)');
-      return;
-    }
-    const txHash = window.prompt(
-      `Send ${contribution.toFixed(2)} USDC to the vault M-address in your Freighter wallet, then paste the 64-char Horizon txHash here:`,
-      '',
-    );
-    if (!txHash) {
-      toast.error('A real Horizon txHash is required to record the round-up.');
-      return;
-    }
-    if (!/^[a-f0-9]{64}$/i.test(txHash)) {
-      toast.error('txHash must be 64 hex characters.');
-      return;
-    }
-    setBusy(true);
-    try {
-      const res = await fetch('/api/roundups', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contributorId: activeContributor,
-          purchaseUsdc: purchase,
-          txHash,
-        }),
-      });
-      const json = await res.json();
-      if (!json.ok) throw new Error(json.error?.message ?? 'Round-up failed');
-      toast.success(
-        json.data.contractAttempt?.invoked
-          ? `Routed ${fmtIdr(json.data.contribution)} into the vault — contract.record_roundup XDR ready for Freighter.`
-          : `Routed ${fmtIdr(json.data.contribution)} into the vault (on-chain record_roundup pending).`,
-      );
-      await refresh();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Round-up failed');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleEnableUsdc() {
-    if (!walletKey) {
-      toast.error('Connect your Freighter wallet first');
-      return;
-    }
-    setEnablingTrust(true);
-    try {
-      const buildRes = await fetch('/api/trustline/usdc', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ publicKey: walletKey }),
-      });
-      const buildJson = await buildRes.json();
-      if (!buildJson.ok) throw new Error(buildJson.error?.message ?? 'Trustline build failed');
-      const signModule: { signTransaction?: (
-        xdr: string,
-        opts?: { networkPassphrase?: string; address?: string },
-      ) => Promise<{ signedTxXdr?: string }> } =
-        (await import('@stellar/freighter-api').catch(() => ({}))) as never;
-      const signed = await signModule.signTransaction?.(buildJson.data.xdr, {
-        networkPassphrase: buildJson.data.networkPassphrase,
-        address: walletKey,
-      });
-      if (!signed?.signedTxXdr) {
-        toast.error('Freighter did not return a signed transaction.');
-        return;
-      }
-      toast.success('USDC trustline signed — submit it from Freighter to activate USDC.');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Trustline failed');
-    } finally {
-      setEnablingTrust(false);
     }
   }
 
@@ -561,7 +401,7 @@ export function RecehClient(props: {
   // Live thermometer + yield ticker
   const poolTotal = stats ? Number.parseFloat(stats.poolTotalUsdc) : 0;
   const yieldUsdc = stats ? Number.parseFloat(stats.accruedYieldUsdc) : 0;
-  const fillPct = Math.min(100, Math.round((poolTotal / POOL_GOAL_USDC) * 100));
+  const fillPct = Math.min(100, Math.round((poolTotal / POOL_GOAL_XLM) * 100));
 
   const [tickYield, setTickYield] = useState(yieldUsdc);
   useEffect(() => {
@@ -596,7 +436,7 @@ export function RecehClient(props: {
             </div>
             <h2 className="text-3xl mb-3 text-slate-900">No spare change pooled yet</h2>
             <p className="text-slate-600 leading-relaxed">
-              Once a merchant embeds the Receh widget and shoppers round up their first USDC
+              Once a merchant embeds the Receh widget and shoppers round up their first XLM
               purchases, the community vault starts to grow here — and the impact thermometer begins
               to climb.
             </p>
@@ -632,9 +472,9 @@ export function RecehClient(props: {
               <span className="italic text-emerald-100">grows communities.</span>
             </h1>
             <p className="text-lg text-emerald-50 max-w-xl mb-8 leading-relaxed">
-              Receh rounds up every USDC purchase and routes the spare change through SEP-7 into a
-              shared DeFindex yield vault. The pool earns variable Blend-market yield, then
-              merchants and shoppers vote each month on which local projects get grants.
+              Receh rounds up every XLM purchase and routes the spare change on-chain into a shared
+              community vault, then merchants and shoppers vote each month on which local projects
+              get grants.
             </p>
             <div className="flex flex-wrap gap-3">
               <a
@@ -654,7 +494,6 @@ export function RecehClient(props: {
             </div>
           </div>
 
-          
           <div className="bg-white/10 backdrop-blur rounded-3xl p-7 border border-white/20">
             <div className="flex items-center justify-between mb-4">
               <span className="font-semibold text-emerald-50">Community vault</span>
@@ -666,11 +505,9 @@ export function RecehClient(props: {
               data-testid="pool-total"
               className="text-5xl font-bold tracking-tight mb-1 tabular-nums"
             >
-              {Number.parseFloat(stats.poolTotalUsdc).toFixed(2)} USDC
+              {Number.parseFloat(stats.poolTotalUsdc).toFixed(7)} XLM
             </div>
-            <div className="text-emerald-100 mb-5">{fmtIdr(stats.poolTotalUsdc)} pooled</div>
 
-            
             <div className="relative h-5 rounded-full bg-emerald-900/40 overflow-hidden mb-2">
               <div
                 data-testid="thermometer-fill"
@@ -680,7 +517,7 @@ export function RecehClient(props: {
             </div>
             <div className="flex justify-between text-xs text-emerald-100 mb-5">
               <span>{fillPct}% to next grant round</span>
-              <span>Goal {POOL_GOAL_USDC} USDC</span>
+              <span>Goal {POOL_GOAL_XLM} XLM</span>
             </div>
 
             <div className="grid grid-cols-2 gap-3 text-center">
@@ -701,31 +538,28 @@ export function RecehClient(props: {
         </div>
       </section>
 
-      
       <section className="bg-emerald-900 text-white py-5">
         <div className="max-w-6xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
           <Stat
             label="Principal pooled"
-            value={`${Number.parseFloat(stats.principalUsdc).toFixed(2)} USDC`}
+            value={`${Number.parseFloat(stats.principalUsdc).toFixed(7)} XLM`}
           />
           <Stat label="Contributors" value={`${stats.contributorCount}`} />
           <Stat label="Grant proposals" value={`${stats.proposalCount}`} />
-          <Stat label="Grants disbursed" value={`${stats.grantedUsdc} USDC`} />
+          <Stat label="Grants disbursed" value={`${stats.grantedUsdc} XLM`} />
         </div>
       </section>
 
       <main className="flex-1 max-w-6xl mx-auto px-6 py-12 w-full grid lg:grid-cols-3 gap-8">
-        
         <div className="lg:col-span-2 space-y-8">
-          
           <div id="widget" className="bg-card rounded-3xl border border-emerald-100 p-7 shadow-sm">
             <div className="flex items-center gap-2 mb-1">
               <Receipt className="w-5 h-5 text-emerald-600" aria-hidden="true" />
               <h2 className="text-2xl text-slate-900">Embeddable checkout widget</h2>
             </div>
             <p className="text-slate-600 mb-6">
-              A shopper pays for a purchase; Receh rounds it up to the next whole USDC and routes
-              the spare change into the shared vault via a SEP-7 payment.
+              A shopper pays for a purchase; Receh rounds it up to the next whole XLM and routes the
+              spare change into the shared vault via a SEP-7 payment.
             </p>
 
             <div className="grid sm:grid-cols-2 gap-5">
@@ -760,151 +594,50 @@ export function RecehClient(props: {
                 )}
               </div>
               <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label htmlFor="purchase" className="block text-sm font-medium text-slate-700">
-                    Purchase amount
-                  </label>
-                  <div
-                    data-testid="purchase-mode-toggle"
-                    className="inline-flex rounded-lg border border-slate-200 p-0.5 text-xs font-semibold"
-                  >
-                    <button
-                      type="button"
-                      data-testid="purchase-mode-usdc"
-                      onClick={() => setPurchaseMode('usdc')}
-                      className={`px-2.5 h-7 rounded-md transition-colors ${
-                        purchaseMode === 'usdc' ? 'bg-emerald-600 text-white' : 'text-slate-500'
-                      }`}
-                    >
-                      USDC
-                    </button>
-                    <button
-                      type="button"
-                      data-testid="purchase-mode-xlm"
-                      onClick={() => setPurchaseMode('xlm')}
-                      className={`px-2.5 h-7 rounded-md transition-colors ${
-                        purchaseMode === 'xlm' ? 'bg-amber-500 text-white' : 'text-slate-500'
-                      }`}
-                    >
-                      XLM
-                    </button>
-                  </div>
-                </div>
-                {purchaseMode === 'usdc' ? (
-                  <input
-                    id="purchase"
-                    data-testid="input-purchase"
-                    inputMode="decimal"
-                    value={purchase}
-                    onChange={(e) => setPurchase(normalizeDecimalInput(e.target.value))}
-                    className="w-full h-12 rounded-xl border border-slate-300 px-3 text-base text-slate-800 bg-white tabular-nums"
-                  />
-                ) : (
-                  <input
-                    id="purchase"
-                    data-testid="input-purchase-xlm"
-                    inputMode="decimal"
-                    value={purchaseXlm}
-                    onChange={(e) => setPurchaseXlm(normalizeDecimalInput(e.target.value))}
-                    className="w-full h-12 rounded-xl border border-slate-300 px-3 text-base text-slate-800 bg-white tabular-nums"
-                  />
-                )}
+                <label
+                  htmlFor="purchase"
+                  className="block text-sm font-medium text-slate-700 mb-1.5"
+                >
+                  Purchase amount (XLM)
+                </label>
+                <input
+                  id="purchase"
+                  data-testid="input-purchase-xlm"
+                  inputMode="decimal"
+                  value={purchaseXlm}
+                  onChange={(e) => setPurchaseXlm(normalizeDecimalInput(e.target.value))}
+                  className="w-full h-12 rounded-xl border border-slate-300 px-3 text-base text-slate-800 bg-white tabular-nums"
+                />
               </div>
             </div>
 
             <div className="mt-5 flex items-center justify-between bg-emerald-50 rounded-2xl px-5 py-4">
-              {purchaseMode === 'usdc' ? (
-                <div>
-                  <div className="text-sm text-slate-600">Spare change to vault</div>
-                  <div
-                    data-testid="contribution-preview"
-                    className="text-2xl font-bold text-emerald-700 tabular-nums"
-                  >
-                    {contribution.toFixed(2)} USDC
-                  </div>
-                  <div className="text-sm text-slate-500">{fmtIdr(contribution)}</div>
-                </div>
-              ) : (
-                <div>
-                  <div className="text-sm text-slate-600">Spare change to vault</div>
-                  <div
-                    data-testid="contribution-preview-xlm"
-                    className="text-2xl font-bold text-amber-600 tabular-nums"
-                  >
-                    {contributionXlm.toFixed(7)} XLM
-                  </div>
-                  <div className="text-sm text-slate-500">converted to USDC on-chain</div>
-                </div>
-              )}
-              <div className="flex flex-col items-end gap-2">
-                {purchaseMode === 'usdc' ? (
-                  <>
-                    <button
-                      type="button"
-                      data-testid="roundup-xlm-btn"
-                      onClick={handleRoundUpXlm}
-                      disabled={busyXlm || busy}
-                      className="inline-flex items-center justify-center gap-2 bg-amber-500 text-white font-semibold px-6 h-12 rounded-xl text-base hover:bg-amber-600 transition-colors disabled:opacity-60"
-                      title="Pay with native XLM — auto-converted to USDC on-chain, one signature, no trustline needed"
-                    >
-                      {busyXlm ? (
-                        <Loader2 className="w-5 h-5 animate-spin" aria-hidden="true" />
-                      ) : (
-                        <Zap className="w-5 h-5" aria-hidden="true" />
-                      )}
-                      Round up with XLM
-                    </button>
-                    <button
-                      type="button"
-                      data-testid="roundup-btn"
-                      onClick={handleRoundUp}
-                      disabled={busy || busyXlm}
-                      className="inline-flex items-center justify-center gap-2 bg-emerald-600 text-white font-semibold px-6 h-12 rounded-xl text-base hover:bg-emerald-700 transition-colors disabled:opacity-60"
-                    >
-                      {busy ? (
-                        <Loader2 className="w-5 h-5 animate-spin" aria-hidden="true" />
-                      ) : (
-                        <Coins className="w-5 h-5" aria-hidden="true" />
-                      )}
-                      Round up &amp; route (manual USDC)
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    data-testid="roundup-xlm-purchase-btn"
-                    onClick={handleRoundUpXlmPurchase}
-                    disabled={busyXlmPurchase}
-                    className="inline-flex items-center justify-center gap-2 bg-amber-500 text-white font-semibold px-6 h-12 rounded-xl text-base hover:bg-amber-600 transition-colors disabled:opacity-60"
-                    title="Purchase and round-up both denominated in XLM — the vault still receives USDC"
-                  >
-                    {busyXlmPurchase ? (
-                      <Loader2 className="w-5 h-5 animate-spin" aria-hidden="true" />
-                    ) : (
-                      <Zap className="w-5 h-5" aria-hidden="true" />
-                    )}
-                    Round up XLM purchase
-                  </button>
-                )}
-                <button
-                  type="button"
-                  data-testid="enable-usdc-btn"
-                  onClick={handleEnableUsdc}
-                  disabled={!walletKey || enablingTrust}
-                  className="inline-flex items-center justify-center gap-2 border border-emerald-600 text-emerald-700 font-semibold px-4 h-9 rounded-lg text-sm hover:bg-emerald-100 transition-colors disabled:opacity-60"
+              <div>
+                <div className="text-sm text-slate-600">Spare change to vault</div>
+                <div
+                  data-testid="contribution-preview-xlm"
+                  className="text-2xl font-bold text-amber-600 tabular-nums"
                 >
-                  {enablingTrust ? (
-                    <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-                  ) : (
-                    <Wallet className="w-4 h-4" aria-hidden="true" />
-                  )}
-                  Enable USDC trustline
-                </button>
+                  {contributionXlm.toFixed(7)} XLM
+                </div>
               </div>
+              <button
+                type="button"
+                data-testid="roundup-xlm-purchase-btn"
+                onClick={handleRoundUpXlmPurchase}
+                disabled={busyXlmPurchase}
+                className="inline-flex items-center justify-center gap-2 bg-amber-500 text-white font-semibold px-6 h-12 rounded-xl text-base hover:bg-amber-600 transition-colors disabled:opacity-60"
+              >
+                {busyXlmPurchase ? (
+                  <Loader2 className="w-5 h-5 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Zap className="w-5 h-5" aria-hidden="true" />
+                )}
+                Round up
+              </button>
             </div>
           </div>
 
-          
           <div className="bg-card rounded-3xl border border-emerald-100 p-7 shadow-sm">
             <div className="flex items-center gap-2 mb-4">
               <Activity className="w-5 h-5 text-emerald-600" aria-hidden="true" />
@@ -926,7 +659,7 @@ export function RecehClient(props: {
                       <Coins className="w-4 h-4 text-emerald-500 shrink-0" aria-hidden="true" />
                       <span className="text-slate-700 truncate">
                         {c?.name ?? 'Shopper'} rounded up a{' '}
-                        {Number.parseFloat(r.purchaseUsdc).toFixed(2)} USDC purchase
+                        {Number.parseFloat(r.purchaseUsdc).toFixed(4)} XLM purchase
                       </span>
                     </div>
                     <span className="font-semibold text-emerald-700 tabular-nums shrink-0">
@@ -938,7 +671,6 @@ export function RecehClient(props: {
             </ul>
           </div>
 
-          
           <div id="vote" className="bg-card rounded-3xl border border-emerald-100 p-7 shadow-sm">
             <div className="flex items-center justify-between mb-5 gap-4 flex-wrap">
               <div className="flex items-center gap-2">
@@ -969,7 +701,6 @@ export function RecehClient(props: {
           </div>
         </div>
 
-        
         <aside className="space-y-8">
           {disbursedProposal && (
             <div
@@ -981,7 +712,7 @@ export function RecehClient(props: {
                 <span className="font-semibold">Grant disbursed</span>
               </div>
               <p className="text-emerald-50 text-sm mb-3">
-                {disbursedProposal.requestedUsdc} USDC sent from the vault to{' '}
+                {disbursedProposal.requestedUsdc} XLM sent from the vault to{' '}
                 {disbursedProposal.organization}.
               </p>
               <div className="bg-emerald-700/60 rounded-xl px-3 py-2 text-xs font-mono break-all">
@@ -996,12 +727,12 @@ export function RecehClient(props: {
               <h3 className="text-xl text-slate-900">DeFindex vault</h3>
             </div>
             <dl className="space-y-2 text-sm">
-              <Row k="Principal" v={`${Number.parseFloat(stats.principalUsdc).toFixed(2)} USDC`} />
+              <Row k="Principal" v={`${Number.parseFloat(stats.principalUsdc).toFixed(7)} XLM`} />
               <Row
                 k="Yield accrued"
-                v={`${Number.parseFloat(stats.accruedYieldUsdc).toFixed(4)} USDC`}
+                v={`${Number.parseFloat(stats.accruedYieldUsdc).toFixed(7)} XLM`}
               />
-              <Row k="Pool total" v={`${Number.parseFloat(stats.poolTotalUsdc).toFixed(2)} USDC`} />
+              <Row k="Pool total" v={`${Number.parseFloat(stats.poolTotalUsdc).toFixed(7)} XLM`} />
               <Row k="Variable APY" v={`${stats.apyPercent}%`} />
             </dl>
             <div className="mt-4 pt-4 border-t border-slate-100">
@@ -1019,8 +750,8 @@ export function RecehClient(props: {
             </div>
             {contributors.length === 0 ? (
               <p className="text-slate-500 text-sm leading-relaxed">
-                No contributors yet. Connect your Freighter wallet above and try the round-up widget to
-                become the first contributor on the leaderboard.
+                No contributors yet. Connect your Freighter wallet above and try the round-up widget
+                to become the first contributor on the leaderboard.
               </p>
             ) : (
               <ul className="space-y-3">
@@ -1046,7 +777,8 @@ export function RecehClient(props: {
           <div className="bg-emerald-50 rounded-3xl border border-emerald-100 p-6">
             <p className="text-slate-700 leading-relaxed mb-3 text-sm">
               &ldquo;Spare change is too small to matter alone. Pooled across a whole neighbourhood,
-              it pays for something real — and every contributor can see exactly where it went.&rdquo;
+              it pays for something real — and every contributor can see exactly where it
+              went.&rdquo;
             </p>
             <div className="font-semibold text-emerald-700">Why round-ups work</div>
             <div className="text-slate-500 text-sm">
@@ -1085,7 +817,7 @@ function ProposalCard({ p, onVote }: { p: ProposalView; onVote: () => void }) {
       <p className="text-slate-600 text-sm mb-4 leading-relaxed">{p.description}</p>
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="text-sm text-slate-600">
-          <span className="font-semibold text-slate-900">{p.requestedUsdc} USDC</span> requested ·{' '}
+          <span className="font-semibold text-slate-900">{p.requestedUsdc} XLM</span> requested ·{' '}
           <span data-testid="vote-weight">{Number.parseFloat(p.voteWeightUsdc).toFixed(2)}</span>{' '}
           weight · {p.voteCount} votes
         </div>
@@ -1207,7 +939,8 @@ function Footer() {
           <span className="font-semibold text-white">Receh</span>
         </div>
         <p className="text-sm text-center">
-          Built on Stellar {process.env.NEXT_PUBLIC_STELLAR_NETWORK === 'public' ? 'Mainnet' : 'Testnet'} · Track B —
+          Built on Stellar{' '}
+          {process.env.NEXT_PUBLIC_STELLAR_NETWORK === 'public' ? 'Mainnet' : 'Testnet'} · Track B —
           Savings &amp; DeFi · APAC Hackathon 2026
         </p>
       </div>

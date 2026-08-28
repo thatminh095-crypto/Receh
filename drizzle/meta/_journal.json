@@ -8,6 +8,13 @@
       "when": 1782574956721,
       "tag": "0000_little_roland_deschain",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1787889924705,
+      "tag": "0001_fluffy_black_panther",
+      "breakpoints": true
     }
   ]
 }
