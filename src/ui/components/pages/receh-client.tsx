@@ -26,6 +26,14 @@ const fmtIdr = (usdc: number | string) => {
   return `Rp ${Math.round(n * IDR_PER_USDC).toLocaleString('id-ID')}`;
 };
 
+/**
+ * Amount inputs only accept a dot decimal separator downstream (parseFloat, the
+ * server's regex validation), but plenty of locales type decimals with a comma —
+ * "10,5" would otherwise silently parse as the whole number 10, always showing
+ * zero spare change. Normalize as the user types instead of failing later.
+ */
+const normalizeDecimalInput = (raw: string) => raw.replace(',', '.');
+
 type Stats = {
   vaultId: string;
   vaultName: string;
@@ -788,7 +796,7 @@ export function RecehClient(props: {
                     data-testid="input-purchase"
                     inputMode="decimal"
                     value={purchase}
-                    onChange={(e) => setPurchase(e.target.value)}
+                    onChange={(e) => setPurchase(normalizeDecimalInput(e.target.value))}
                     className="w-full h-12 rounded-xl border border-slate-300 px-3 text-base text-slate-800 bg-white tabular-nums"
                   />
                 ) : (
@@ -797,7 +805,7 @@ export function RecehClient(props: {
                     data-testid="input-purchase-xlm"
                     inputMode="decimal"
                     value={purchaseXlm}
-                    onChange={(e) => setPurchaseXlm(e.target.value)}
+                    onChange={(e) => setPurchaseXlm(normalizeDecimalInput(e.target.value))}
                     className="w-full h-12 rounded-xl border border-slate-300 px-3 text-base text-slate-800 bg-white tabular-nums"
                   />
                 )}
